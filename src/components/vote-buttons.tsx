@@ -8,7 +8,7 @@
 // pick a name first.
 
 import { useOptimistic, useState, useTransition } from "react";
-import { ThumbsDown, ThumbsUp } from "lucide-react";
+import { Check, ThumbsDown, ThumbsUp } from "lucide-react";
 import { toast } from "sonner";
 
 import { castVote } from "@/actions/votes";
@@ -21,6 +21,8 @@ interface VoteButtonsProps {
   currentValue: boolean | null;
   yesCount: number;
   noCount: number;
+  /** Group size — the denominator for the quorum line + participation bar. */
+  memberCount: number;
 }
 
 /** Local snapshot of what the buttons should show, kept optimistic. */
@@ -36,6 +38,7 @@ export function VoteButtons({
   currentValue,
   yesCount,
   noCount,
+  memberCount,
 }: VoteButtonsProps) {
   const [isPending, startTransition] = useTransition();
 
@@ -77,30 +80,121 @@ export function VoteButtons({
   const noActive = optimistic.value === false;
 
   return (
-    <div className="grid grid-cols-2 gap-2.5">
-      <VotePill
-        tone="yes"
-        active={yesActive}
-        popped={popped === true && yesActive}
-        count={optimistic.yes}
-        disabled={disabled || isPending}
-        onClick={() => handleVote(true)}
-        label="Vote yes"
-      >
-        <ThumbsUp className="size-4" strokeWidth={2} aria-hidden />
-      </VotePill>
+    <div className="flex flex-col gap-2.5">
+      <ConsensusStrip
+        yes={optimistic.yes}
+        no={optimistic.no}
+        memberCount={memberCount}
+      />
 
-      <VotePill
-        tone="no"
-        active={noActive}
-        popped={popped === false && noActive}
-        count={optimistic.no}
-        disabled={disabled || isPending}
-        onClick={() => handleVote(false)}
-        label="Vote no"
+      <div className="grid grid-cols-2 gap-2.5">
+        <VotePill
+          tone="yes"
+          active={yesActive}
+          popped={popped === true && yesActive}
+          count={optimistic.yes}
+          disabled={disabled || isPending}
+          onClick={() => handleVote(true)}
+          label="Vote yes"
+        >
+          <ThumbsUp className="size-4" strokeWidth={2} aria-hidden />
+        </VotePill>
+
+        <VotePill
+          tone="no"
+          active={noActive}
+          popped={popped === false && noActive}
+          count={optimistic.no}
+          disabled={disabled || isPending}
+          onClick={() => handleVote(false)}
+          label="Vote no"
+        >
+          <ThumbsDown className="size-4" strokeWidth={2} aria-hidden />
+        </VotePill>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The glanceable group verdict that sits above the pills: a net-score pill, a
+ * participation/split bar, and a quorum line. It reads from the SAME optimistic
+ * tallies as the pills, so it shifts the instant you vote — before the server
+ * round-trip. Wrapped in an aria-live region so screen-reader users hear the
+ * running tally as realtime votes stream in (polite, never interrupting).
+ */
+function ConsensusStrip({
+  yes,
+  no,
+  memberCount,
+}: {
+  yes: number;
+  no: number;
+  memberCount: number;
+}) {
+  const voted = yes + no;
+  const net = yes - no;
+  // Denominator for the bar: the group size, but never less than the votes cast
+  // (a removed member's stale vote shouldn't overflow the bar past 100%).
+  const denom = Math.max(memberCount, voted, 1);
+  const yesPct = (yes / denom) * 100;
+  const noPct = (no / denom) * 100;
+  const everyone = voted > 0 && memberCount > 0 && voted >= memberCount;
+
+  const quorum =
+    voted === 0
+      ? "No votes yet"
+      : everyone
+        ? "Everyone voted"
+        : `${voted} of ${memberCount} voted`;
+
+  return (
+    <div role="status" aria-live="polite" aria-atomic="true" className="flex flex-col gap-1.5">
+      {/* One clean sentence for assistive tech; the visual chips below are hidden
+          from the a11y tree so the tally isn't announced twice. */}
+      <span className="sr-only">
+        {yes} yes, {no} no. {quorum}.
+      </span>
+
+      <div aria-hidden className="flex items-center justify-between gap-2">
+        {voted === 0 ? (
+          <span className="text-xs font-medium text-muted-foreground">Cast the first vote</span>
+        ) : net === 0 ? (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground tabular-nums">
+            Tied {yes}–{no}
+          </span>
+        ) : (
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums",
+              net > 0 ? "bg-yes/12 text-yes" : "bg-foreground/10 text-foreground",
+            )}
+          >
+            {net > 0 ? `+${net}` : `−${Math.abs(net)}`} {net > 0 ? "leaning yes" : "leaning no"}
+          </span>
+        )}
+
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground tabular-nums">
+          {everyone && <Check className="size-3.5 text-yes" aria-hidden />}
+          {quorum}
+        </span>
+      </div>
+
+      {/* Participation bar: green YES + ink NO segments over a hairline track, so
+          "few voted" reads as a mostly-empty bar and "split" reads as two colors. */}
+      <div
+        aria-hidden
+        className="flex h-1.5 w-full overflow-hidden rounded-full bg-border"
       >
-        <ThumbsDown className="size-4" strokeWidth={2} aria-hidden />
-      </VotePill>
+        <span
+          className="h-full bg-yes transition-[width] duration-300 ease-out motion-reduce:transition-none"
+          style={{ width: `${yesPct}%` }}
+        />
+        <span
+          className="h-full bg-no transition-[width] duration-300 ease-out motion-reduce:transition-none"
+          style={{ width: `${noPct}%` }}
+        />
+      </div>
     </div>
   );
 }

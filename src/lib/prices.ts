@@ -141,3 +141,74 @@ export function effectiveNightly(acc: {
   if (member != null) return member;
   return acc.price_per_night != null ? Number(acc.price_per_night) : null;
 }
+
+/** The minimal candidate shape the leg-level decision signals need. */
+export interface LegCandidate {
+  id: string;
+  votes: { value: boolean }[];
+  price_per_night: number | null;
+  prices?: { amount: number }[] | null;
+}
+
+/**
+ * Glanceable, leg-wide verdicts the carousel paints onto exactly the right card:
+ * the group's FRONT-RUNNER (the "Group favorite" ribbon) and the UNIQUE CHEAPEST
+ * option (the "Best price here" badge). Both are scarce by design — at most one of
+ * each per leg — so the badges keep meaning "this is the one".
+ *
+ * Front-runner: the candidate with the highest net yes-vote (yes − no), requiring
+ * a positive net (more yes than no) so a leg no one likes crowns nothing; ties on
+ * net are broken by the lower effective nightly price (the better deal wins),
+ * then by input order for stability.
+ *
+ * Cheapest: the single lowest effective nightly price. Suppressed on a tie (two
+ * options share the low) so we never imply a false "winner".
+ *
+ * Both are suppressed when the leg has fewer than two candidates — with nothing to
+ * compare against, "favorite" and "cheapest" are meaningless.
+ */
+export interface LegSignals {
+  frontRunnerId: string | null;
+  cheapestId: string | null;
+}
+
+export function legDecisionSignals(candidates: LegCandidate[]): LegSignals {
+  if (candidates.length < 2) {
+    return { frontRunnerId: null, cheapestId: null };
+  }
+
+  const net = (c: LegCandidate) =>
+    c.votes.reduce((sum, v) => sum + (v.value ? 1 : -1), 0);
+  const nightly = (c: LegCandidate) => effectiveNightly(c);
+
+  // Front-runner: max positive net, tie-broken by the cheaper effective nightly.
+  let leader: LegCandidate | null = null;
+  let leaderNet = 0;
+  for (const c of candidates) {
+    const n = net(c);
+    if (n < 1) continue; // needs more yes than no to be a "favorite"
+    if (leader == null || n > leaderNet) {
+      leader = c;
+      leaderNet = n;
+      continue;
+    }
+    if (n === leaderNet) {
+      const cn = nightly(c) ?? Infinity;
+      const ln = nightly(leader) ?? Infinity;
+      if (cn < ln) leader = c;
+    }
+  }
+
+  // Cheapest: the single lowest effective nightly; null on a tie or when <2 priced.
+  const priced = candidates
+    .map((c) => ({ id: c.id, nightly: nightly(c) }))
+    .filter((c): c is { id: string; nightly: number } => c.nightly != null);
+  let cheapestId: string | null = null;
+  if (priced.length >= 2) {
+    const min = Math.min(...priced.map((p) => p.nightly));
+    const atMin = priced.filter((p) => p.nightly === min);
+    if (atMin.length === 1) cheapestId = atMin[0].id;
+  }
+
+  return { frontRunnerId: leader?.id ?? null, cheapestId };
+}

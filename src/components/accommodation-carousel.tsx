@@ -16,7 +16,9 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { AccommodationCard } from "@/components/accommodation-card";
 import { cn } from "@/lib/utils";
-import type { AccommodationWithVotes, Member } from "@/lib/types";
+import { legDecisionSignals } from "@/lib/prices";
+import type { ScoreResult } from "@/lib/location-score";
+import type { AccommodationWithVotes, Member, Place } from "@/lib/types";
 
 interface AccommodationCarouselProps {
   accommodations: AccommodationWithVotes[];
@@ -25,6 +27,10 @@ interface AccommodationCarouselProps {
   stayArea: string | null;
   stayLabel: string;
   stayNights: number | null;
+  /** This leg's places-to-visit + per-card location scores (location scoring only). */
+  places: Place[];
+  scores: Map<string, ScoreResult>;
+  locationScoringEnabled: boolean;
 }
 
 /** The card width, shared by the cards and the centring padding. */
@@ -37,9 +43,20 @@ export function AccommodationCarousel({
   stayArea,
   stayLabel,
   stayNights,
+  places,
+  scores,
+  locationScoringEnabled,
 }: AccommodationCarouselProps) {
   const trackRef = React.useRef<HTMLDivElement>(null);
   const count = accommodations.length;
+
+  // Leg-wide verdicts painted onto exactly the right card: the "Group favorite"
+  // front-runner and the unique cheapest option. Recomputed live as votes/prices
+  // stream in (the parent re-renders the carousel with fresh accommodations).
+  const { frontRunnerId, cheapestId } = React.useMemo(
+    () => legDecisionSignals(accommodations),
+    [accommodations],
+  );
 
   const [active, setActive] = React.useState(0);
   const [atStart, setAtStart] = React.useState(true);
@@ -142,6 +159,12 @@ export function AccommodationCarousel({
               stayArea={stayArea}
               stayLabel={stayLabel}
               stayNights={stayNights}
+              places={places}
+              score={scores.get(accommodation.id) ?? null}
+              locationScoringEnabled={locationScoringEnabled}
+              isFrontRunner={accommodation.id === frontRunnerId}
+              isCheapestInLeg={accommodation.id === cheapestId}
+              priority={i === 0}
             />
           </div>
         ))}

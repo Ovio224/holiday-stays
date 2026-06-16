@@ -176,7 +176,7 @@ export function PriceChart({
   const reference = formatMoney(referenceAmount, currency);
 
   return (
-    <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-muted/30 p-3">
+    <section className="flex flex-col gap-2.5 rounded-xl bg-muted/40 p-4">
       <div className="flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1 text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase">
           <Tag className="size-3" aria-hidden />
@@ -328,8 +328,9 @@ function PriceBar({
   currency: string | null;
   isMine: boolean;
 }) {
-  // Floor the width so even the cheapest (shortest) bar stays visible.
-  const width = `${Math.max(entry.ratio, 0.16) * 100}%`;
+  // Floor the width so even the cheapest (shortest) bar stays visible — but keep
+  // the floor small so near-ties read as visually close instead of exaggerated.
+  const width = `${Math.max(entry.ratio, 0.06) * 100}%`;
 
   return (
     <li className="flex items-center gap-2">
@@ -387,7 +388,7 @@ function BookerCallout({
   currency: string | null;
   stayNights: number | null;
 }) {
-  const { cheapest, count, allEqual, min } = comparison;
+  const { entries, cheapest, count, allEqual, min } = comparison;
   if (count === 0 || min == null) return null;
 
   // Everyone sees the same number — no one has an edge.
@@ -405,27 +406,42 @@ function BookerCallout({
   const cheapestColor = cheapest[0].member.color;
   const legTotal = nightlyTotal(min, stayNights);
 
+  // How much the best price beats the *next* real price someone entered — an
+  // honest, attainable anchor (never an invented MSRP). Suppressed under $1 so a
+  // rounding-level gap never reads as a meaningful saving.
+  const nextCheapest = entries.find((e) => e.amount > min)?.amount ?? null;
+  const savings =
+    nextCheapest != null ? Math.round((nextCheapest - min) * 100) / 100 : null;
+
   return (
-    <p
-      className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground"
+    <div
+      className="flex flex-col gap-1 rounded-md px-2.5 py-2 text-xs"
       style={{ backgroundColor: `color-mix(in oklch, ${cheapestColor} 16%, transparent)` }}
     >
-      <Trophy className="size-3.5 shrink-0" style={{ color: cheapestColor }} aria-hidden />
-      <span>
-        <span className="font-bold">{names}</span>{" "}
-        {tie ? "tie for the best price" : "has the best price"} at{" "}
-        <span className="font-bold tabular-nums">{formatMoney(min, currency)}</span>/night
-        {legTotal != null && stayNights != null && (
-          <span className="font-normal text-muted-foreground">
-            {" "}
-            · {formatMoney(legTotal, currency)} for {stayNights}{" "}
-            {stayNights === 1 ? "night" : "nights"}
-          </span>
-        )}
-      </span>
-      <span className="font-semibold" style={{ color: cheapestColor }}>
-        → {tie ? "either books" : `${cheapest[0].member.name} books`}
-      </span>
-    </p>
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-medium text-foreground">
+        <Trophy className="size-3.5 shrink-0" style={{ color: cheapestColor }} aria-hidden />
+        <span>
+          <span className="font-bold">{names}</span>{" "}
+          {tie ? "tie for the best price" : "has the best price"} at{" "}
+          <span className="font-bold tabular-nums">{formatMoney(min, currency)}</span>/night
+          {legTotal != null && stayNights != null && (
+            <span className="font-normal text-muted-foreground">
+              {" "}
+              · {formatMoney(legTotal, currency)} for {stayNights}{" "}
+              {stayNights === 1 ? "night" : "nights"}
+            </span>
+          )}
+        </span>
+        <span className="font-semibold" style={{ color: cheapestColor }}>
+          → {tie ? "either books" : `${cheapest[0].member.name} books`}
+        </span>
+      </p>
+
+      {savings != null && savings >= 1 && (
+        <p className="pl-5 font-semibold text-yes tabular-nums">
+          Saves {formatMoney(savings, currency)}/night vs the next price
+        </p>
+      )}
+    </div>
   );
 }
