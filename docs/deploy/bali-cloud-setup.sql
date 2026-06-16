@@ -206,6 +206,51 @@ do $$ begin
   end if;
 end $$;
 
+-- ── per-card comments: a Notion-style discussion thread ─────────────
+-- Each member can leave many comments on an accommodation, so the group can say
+-- WHY they're leaning yes/no instead of just casting a silent vote. No
+-- (accommodation, member) unique pair (it's a thread). Streamed live; the read
+-- query in the app degrades gracefully if this block hasn't been run yet.
+create table if not exists bali.accommodation_comments (
+  id                uuid        primary key default gen_random_uuid(),
+  accommodation_id  uuid        not null references bali.accommodations(id) on delete cascade,
+  member_id         uuid        not null references bali.members(id) on delete cascade,
+  body              text        not null check (char_length(btrim(body)) between 1 and 2000),
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create index if not exists accommodation_comments_accommodation_id_created_at_idx
+  on bali.accommodation_comments (accommodation_id, created_at);
+
+-- Open SELECT for the Data API roles (gate cookie is the real boundary, no write
+-- policy → anon can only read); service_role needs its OWN grant because the
+-- earlier `grant all on all tables` only covered tables that existed back then.
+alter table bali.accommodation_comments enable row level security;
+do $$ begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'bali' and tablename = 'accommodation_comments'
+      and policyname = 'accommodation_comments_read'
+  ) then
+    create policy "accommodation_comments_read" on bali.accommodation_comments
+      for select to anon, authenticated using (true);
+  end if;
+end $$;
+grant select on bali.accommodation_comments to anon, authenticated;
+grant all    on bali.accommodation_comments to service_role;
+
+-- Stream comment changes to the browser anon client. Guarded so it's re-runnable.
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'bali' and tablename = 'accommodation_comments'
+  ) then
+    alter publication supabase_realtime add table bali.accommodation_comments;
+  end if;
+end $$;
+
 -- ── seed: trip legs + sample members (edit for your real itinerary) ─
 -- Seed data for local development / `supabase db reset`.
 --

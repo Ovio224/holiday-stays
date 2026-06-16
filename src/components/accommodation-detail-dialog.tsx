@@ -20,6 +20,7 @@ import { Expand, ExternalLink, ImageOff, MapPin, Pencil, Star } from "lucide-rea
 import { toast } from "sonner";
 
 import { updateAccommodation } from "@/actions/accommodations";
+import { CommentThread } from "@/components/comment-thread";
 import {
   mapEmbedUrl,
   mapLinkUrl,
@@ -85,7 +86,7 @@ export function AccommodationDetailDialog({
           <Button
             type="button"
             variant="outline"
-            className="min-h-11 w-full rounded-lg text-sm font-semibold"
+            className="min-h-10 rounded-lg px-4 text-sm font-semibold"
           />
         }
       >
@@ -93,7 +94,7 @@ export function AccommodationDetailDialog({
         Details
       </DialogTrigger>
 
-      <DialogContent className="max-h-[90dvh] w-full max-w-lg overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] w-full max-w-[calc(100%-2rem)] overflow-y-auto sm:max-w-3xl lg:max-w-4xl">
         {editing ? (
           <EditView
             accommodation={accommodation}
@@ -105,6 +106,7 @@ export function AccommodationDetailDialog({
           <ReadView
             accommodation={accommodation}
             members={members}
+            currentMemberId={currentMemberId}
             stayArea={stayArea}
             stayLabel={stayLabel}
             stayNights={stayNights}
@@ -121,6 +123,7 @@ export function AccommodationDetailDialog({
 function ReadView({
   accommodation,
   members,
+  currentMemberId,
   stayArea,
   stayLabel,
   stayNights,
@@ -129,6 +132,7 @@ function ReadView({
 }: {
   accommodation: AccommodationWithVotes;
   members: Member[];
+  currentMemberId: string | null;
   stayArea: string | null;
   stayLabel: string;
   stayNights: number | null;
@@ -184,48 +188,52 @@ function ReadView({
         </DialogDescription>
       </DialogHeader>
 
-      {/* Cover image */}
-      <div className="relative aspect-video w-full overflow-hidden rounded-lg">
-        {accommodation.image_url ? (
-          <Image
-            src={accommodation.image_url}
-            alt={title}
-            fill
-            sizes="(max-width: 640px) 100vw, 32rem"
-            className="object-cover"
-          />
+      {/* Cover image + map, side by side on wider screens. */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
+          {accommodation.image_url ? (
+            <Image
+              src={accommodation.image_url}
+              alt={title}
+              fill
+              sizes="(max-width: 640px) 100vw, 28rem"
+              className="object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <ImageOff className="size-10 text-muted-foreground" strokeWidth={1.5} aria-hidden />
+            </div>
+          )}
+        </div>
+
+        {/* Map — only when we have something searchable. */}
+        {query ? (
+          <div className="flex flex-col gap-2">
+            <iframe
+              title="Map"
+              loading="lazy"
+              src={mapEmbedUrl(query)}
+              className="aspect-video w-full rounded-lg border border-border"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+            <Link
+              href={mapLinkUrl(query)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex w-fit items-center gap-1 text-sm text-foreground underline-offset-2 hover:underline"
+            >
+              <ExternalLink className="size-3.5" aria-hidden />
+              Open in Google Maps
+            </Link>
+          </div>
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-muted">
-            <ImageOff className="size-10 text-muted-foreground" strokeWidth={1.5} aria-hidden />
+          <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 px-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              Add an address to show this place on a map.
+            </p>
           </div>
         )}
       </div>
-
-      {/* Map — only when we have something searchable. */}
-      {query ? (
-        <div className="flex flex-col gap-2">
-          <iframe
-            title="Map"
-            loading="lazy"
-            src={mapEmbedUrl(query)}
-            className="aspect-video w-full rounded-lg border border-border"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
-          <Link
-            href={mapLinkUrl(query)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex w-fit items-center gap-1 text-sm text-foreground underline-offset-2 hover:underline"
-          >
-            <ExternalLink className="size-3.5" aria-hidden />
-            Open in Google Maps
-          </Link>
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          Add an address to show this place on a map.
-        </p>
-      )}
 
       {/* Info */}
       <div className="flex flex-col gap-3 text-sm">
@@ -308,6 +316,18 @@ function ReadView({
           View original listing
         </Link>
       </div>
+
+      <hr className="border-border" />
+
+      {/* Full discussion thread — say why this place is a yes or no. */}
+      <CommentThread
+        accommodationId={accommodation.id}
+        comments={accommodation.comments}
+        members={members}
+        votes={accommodation.votes}
+        currentMemberId={currentMemberId}
+        variant="dialog"
+      />
 
       <DialogFooter>
         <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
@@ -428,7 +448,7 @@ function EditView({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className="mx-auto flex w-full max-w-2xl flex-col gap-4">
       <DialogHeader>
         <DialogTitle className="text-lg">Edit details</DialogTitle>
         <DialogDescription>
@@ -523,8 +543,8 @@ function EditView({
         />
       </div>
 
-      {/* Capacity — a 2×2 grid on every width. */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Capacity — a 2×2 grid on phones, a single row on wider screens. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="flex flex-col gap-2">
           <Label htmlFor="detail-guests">Guests</Label>
           <Input

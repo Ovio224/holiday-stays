@@ -192,6 +192,34 @@ export function nightlyTotal(
   return Math.round(pricePerNight * nightCount * 100) / 100;
 }
 
+/**
+ * A compact relative timestamp like "just now", "5m", "3h", "2d", "4w" from an
+ * ISO string, measured against an explicit `nowMs` (passed in, never read from
+ * the clock here) so it stays pure + unit-testable and lets callers control
+ * hydration. Falls back to "" for a missing/unparseable input, and never returns
+ * a negative ("future") value — clock skew clamps to "just now".
+ */
+export function formatRelativeTime(iso: string | null, nowMs: number): string {
+  if (!iso) return "";
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "";
+
+  const seconds = Math.max(0, Math.round((nowMs - then) / 1000));
+  if (seconds < 45) return "just now";
+
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d`;
+  const weeks = Math.round(days / 7);
+  if (weeks < 5) return `${weeks}w`;
+  const months = Math.round(days / 30);
+  if (months < 12) return `${months}mo`;
+  return `${Math.round(days / 365)}y`;
+}
+
 /** Pull a leading numeric amount out of a free-form price string. */
 export function parsePriceAmount(text: string | null): number | null {
   if (!text) return null;

@@ -65,6 +65,20 @@ export interface AccommodationPrice {
   updated_at: string;
 }
 
+/**
+ * One comment in an accommodation's discussion thread — a Notion-style note where
+ * a member explains WHY they're leaning yes/no, beyond a silent vote. Unlike votes
+ * and prices there's no one-per-member constraint: a thread holds many comments.
+ */
+export interface AccommodationComment {
+  id: string;
+  accommodation_id: string;
+  member_id: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Structured details parsed from a listing (rating + capacity). */
 export interface ListingDetails {
   rating: number | null; // e.g. 4.82 (Airbnb /5) or 9.5 (Booking /10)
@@ -86,9 +100,11 @@ export interface ParsedListing {
   details: ListingDetails;
 }
 
-// View model the board renders: an accommodation with its votes and the per-member
-// prices joined in. (Name kept for continuity — it now carries prices too.)
+// View model the board renders: an accommodation with its votes, the per-member
+// prices, and the discussion thread joined in. (Name kept for continuity — it now
+// carries prices + comments too.)
 export interface AccommodationWithVotes extends Accommodation {
   votes: Vote[];
   prices: AccommodationPrice[];
+  comments: AccommodationComment[];
 }

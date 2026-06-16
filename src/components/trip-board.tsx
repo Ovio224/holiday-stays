@@ -65,17 +65,22 @@ export function TripBoard({
   }, []);
 
   // Leg-editor state. editingStay null = create mode; a stay = edit mode. The
-  // LegSheet is keyed on the target so it remounts (and re-seeds fields) cleanly.
+  // LegSheet is keyed on the target AND a per-open nonce, so it remounts (and
+  // re-seeds its fields) on every open — including consecutive creates, which
+  // would otherwise reuse the same "new" instance and keep the last values.
   const [legSheetOpen, setLegSheetOpen] = React.useState(false);
   const [editingStay, setEditingStay] = React.useState<Stay | null>(null);
+  const [legSheetNonce, setLegSheetNonce] = React.useState(0);
 
   const openCreateLeg = React.useCallback(() => {
     setEditingStay(null);
+    setLegSheetNonce((n) => n + 1);
     setLegSheetOpen(true);
   }, []);
 
   const openEditLeg = React.useCallback((stay: Stay) => {
     setEditingStay(stay);
+    setLegSheetNonce((n) => n + 1);
     setLegSheetOpen(true);
   }, []);
 
@@ -155,7 +160,7 @@ export function TripBoard({
   );
 
   return (
-    <div className="relative">
+    <div className="relative overflow-x-clip">
       <header className="mx-auto mb-10 w-full max-w-2xl px-4 sm:px-6 lg:mb-16 lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-12">
           {/* Title + intro — capped to a comfortable reading measure. */}
@@ -270,9 +275,10 @@ export function TripBoard({
         open={legSheetOpen}
         onOpenChange={setLegSheetOpen}
         stay={editingStay}
-        onSaved={applyStayUpsert}
+        stays={sortedStays}
+        onSaved={(changed) => changed.forEach(applyStayUpsert)}
         onDeleted={applyStayRemoval}
-        key={editingStay?.id ?? "new"}
+        key={`${editingStay?.id ?? "new"}-${legSheetNonce}`}
       />
     </div>
   );

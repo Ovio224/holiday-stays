@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import type {
   Accommodation,
+  AccommodationComment,
   AccommodationPrice,
   AccommodationWithVotes,
   Member,
@@ -73,9 +74,9 @@ function removeStay(list: Stay[], stayId: string): Stay[] {
 }
 
 /**
- * Upsert an accommodation row while preserving its existing votes + prices.
- * The realtime payload for `accommodations` carries no votes/prices columns, so
- * an INSERT/UPDATE must never clobber the nested relations we already hold.
+ * Upsert an accommodation row while preserving its existing votes + prices +
+ * comments. The realtime payload for `accommodations` carries none of those nested
+ * columns, so an INSERT/UPDATE must never clobber the relations we already hold.
  */
 function upsertAccommodation(
   list: AccommodationWithVotes[],
@@ -83,13 +84,15 @@ function upsertAccommodation(
 ): AccommodationWithVotes[] {
   const existing = list.find((a) => a.id === row.id);
   if (existing) {
-    // Merge new columns over the old, but keep the votes + prices we already have.
+    // Merge new columns over the old, but keep the nested relations we already have.
     return list.map((a) =>
-      a.id === row.id ? { ...a, ...row, votes: a.votes, prices: a.prices } : a,
+      a.id === row.id
+        ? { ...a, ...row, votes: a.votes, prices: a.prices, comments: a.comments }
+        : a,
     );
   }
-  // Brand-new accommodation: no votes or prices yet.
-  return [...list, { ...row, votes: [], prices: [] }];
+  // Brand-new accommodation: no votes, prices, or comments yet.
+  return [...list, { ...row, votes: [], prices: [], comments: [] }];
 }
 
 /** Apply a vote insert/update to the matching accommodation's votes array. */
@@ -141,6 +144,32 @@ function removePrice(
   return list.map((a) => {
     if (!a.prices.some((p) => p.id === priceId)) return a;
     return { ...a, prices: a.prices.filter((p) => p.id !== priceId) };
+  });
+}
+
+/** Apply a comment insert/update to the matching accommodation's thread. */
+function upsertComment(
+  list: AccommodationWithVotes[],
+  comment: AccommodationComment,
+): AccommodationWithVotes[] {
+  return list.map((a) => {
+    if (a.id !== comment.accommodation_id) return a;
+    const hasComment = a.comments.some((c) => c.id === comment.id);
+    const comments = hasComment
+      ? a.comments.map((c) => (c.id === comment.id ? comment : c))
+      : [...a.comments, comment];
+    return { ...a, comments };
+  });
+}
+
+/** Remove a comment (by id) from whichever accommodation holds it. */
+function removeComment(
+  list: AccommodationWithVotes[],
+  commentId: string,
+): AccommodationWithVotes[] {
+  return list.map((a) => {
+    if (!a.comments.some((c) => c.id === commentId)) return a;
+    return { ...a, comments: a.comments.filter((c) => c.id !== commentId) };
   });
 }
 
@@ -242,6 +271,22 @@ export function useRealtimeBoard({
           const price = payload.new as unknown as AccommodationPrice;
           if (!price?.id) return;
           setAccommodations((prev) => upsertPrice(prev, price));
+        },
+      )
+      // --- accommodation_comments (per-card discussion) -------------------
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "bali", table: "accommodation_comments" },
+        (payload: ChangePayload) => {
+          if (payload.eventType === "DELETE") {
+            const oldId = (payload.old as Partial<AccommodationComment>).id;
+            if (!oldId) return;
+            setAccommodations((prev) => removeComment(prev, oldId));
+            return;
+          }
+          const comment = payload.new as unknown as AccommodationComment;
+          if (!comment?.id) return;
+          setAccommodations((prev) => upsertComment(prev, comment));
         },
       )
       // --- members --------------------------------------------------------

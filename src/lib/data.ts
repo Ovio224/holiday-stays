@@ -6,6 +6,7 @@ import type {
   Stay,
   Member,
   Accommodation,
+  AccommodationComment,
   AccommodationPrice,
   Vote,
   AccommodationWithVotes,
@@ -62,21 +63,30 @@ export async function getBoardData(): Promise<{
 }> {
   const supabase = getServiceClient();
 
-  const [staysResult, accommodationsResult, membersResult] = await Promise.all([
-    supabase
-      .from("stays")
-      .select("*")
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("accommodations")
-      .select("*, votes(*), accommodation_prices(*)")
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("members")
-      .select("*")
-      .order("created_at", { ascending: true }),
-  ]);
+  // Comments are loaded as a SEPARATE query (not a PostgREST embed) so the board
+  // never hard-fails if the bali.accommodation_comments table hasn't been applied
+  // to this database yet — a missing relation just degrades to an empty thread.
+  // (Embeds fail the whole accommodations query; a standalone error doesn't.)
+  const [staysResult, accommodationsResult, membersResult, commentsResult] =
+    await Promise.all([
+      supabase
+        .from("stays")
+        .select("*")
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("accommodations")
+        .select("*, votes(*), accommodation_prices(*)")
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("members")
+        .select("*")
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("accommodation_comments")
+        .select("*")
+        .order("created_at", { ascending: true }),
+    ]);
 
   if (staysResult.error) {
     throw new Error(`Failed to load stays: ${staysResult.error.message}`);
@@ -93,13 +103,29 @@ export async function getBoardData(): Promise<{
   const stays = (staysResult.data ?? []) as Stay[];
   const members = (membersResult.data ?? []) as Member[];
 
-  // Ensure votes + prices are always arrays, even if PostgREST returns null.
+  // Bucket comments by accommodation. A query error (e.g. the table isn't applied
+  // here yet) is non-fatal: we log once and fall back to no comments rather than
+  // breaking the whole board.
+  if (commentsResult.error) {
+    console.warn(
+      `Comments unavailable (continuing without them): ${commentsResult.error.message}`,
+    );
+  }
+  const commentsByAccommodation = new Map<string, AccommodationComment[]>();
+  for (const comment of (commentsResult.data ?? []) as AccommodationComment[]) {
+    const bucket = commentsByAccommodation.get(comment.accommodation_id);
+    if (bucket) bucket.push(comment);
+    else commentsByAccommodation.set(comment.accommodation_id, [comment]);
+  }
+
+  // Ensure votes + prices + comments are always arrays, even if PostgREST returns null.
   const accommodations: AccommodationWithVotes[] = (
     (accommodationsResult.data ?? []) as AccommodationRow[]
   ).map(({ accommodation_prices, ...row }) => ({
     ...row,
     votes: row.votes ?? [],
     prices: accommodation_prices ?? [],
+    comments: commentsByAccommodation.get(row.id) ?? [],
   }));
 
   return { stays, accommodations, members };

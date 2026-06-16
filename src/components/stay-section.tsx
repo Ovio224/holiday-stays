@@ -1,16 +1,17 @@
 "use client";
 
 // StaySection — one leg of the trip. A bold heading with the date range +
-// nights pill and an "Add a place" action, then a responsive grid of
-// AccommodationCards. When a leg has no places yet it shows a friendly glass
-// invitation to drop the first link.
+// nights pill and the leg controls, then a full-bleed CAROUSEL of large
+// AccommodationCards (one big ~80vw card at a time, swipe/scroll between them).
+// When a leg has no places yet it shows a friendly invitation to drop the first
+// link.
 //
 // This is a client component because it surfaces the onAdd callback that the
 // parent board wires up to open the add-link sheet.
 
 import { CalendarDays, ChevronDown, ChevronUp, MapPin, Pencil, Plus } from "lucide-react";
 
-import { AccommodationCard } from "@/components/accommodation-card";
+import { AccommodationCarousel } from "@/components/accommodation-carousel";
 import { Button } from "@/components/ui/button";
 import { formatDateRange, nights } from "@/lib/format";
 import type { AccommodationWithVotes, Member, Stay } from "@/lib/types";
@@ -48,11 +49,10 @@ export function StaySection({
   const metaParts = [range, nightLabel].filter(Boolean);
 
   return (
-    <section className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(220px,260px)_1fr] lg:items-start lg:gap-8 xl:gap-10">
-      {/* Leg header. A wrapping row above the cards on mobile; on desktop it
-          becomes a sticky left rail so the leg's name, dates and controls stay
-          in view while you scroll its candidates. */}
-      <header className="flex flex-wrap items-end justify-between gap-3 lg:sticky lg:top-6 lg:flex-col lg:items-start lg:justify-start lg:gap-5 lg:self-start">
+    <section className="flex flex-col gap-5">
+      {/* Leg header — a full-width row above the carousel: name, location + dates
+          on the left, controls on the right. */}
+      <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1.5">
           <h2 className="text-xl font-semibold leading-tight text-foreground">
             {stay.label}
@@ -132,24 +132,15 @@ export function StaySection({
           </Button>
         </div>
       ) : (
-        // Card grid sized by container queries: it responds to the column's
-        // OWN width, so it lays out correctly whether it's the full board width
-        // (mobile) or the narrower right-hand column beside the desktop rail.
-        <div className="@container">
-          <div className="grid grid-cols-1 gap-4 @md:grid-cols-2 @md:gap-5 @4xl:grid-cols-3">
-            {accommodations.map((accommodation) => (
-              <AccommodationCard
-                key={accommodation.id}
-                accommodation={accommodation}
-                members={members}
-                currentMemberId={currentMemberId}
-                stayArea={stay.area}
-                stayLabel={stay.label}
-                stayNights={nightCount}
-              />
-            ))}
-          </div>
-        </div>
+        // Full-bleed carousel: one big card at a time, swipe/scroll between them.
+        <AccommodationCarousel
+          accommodations={accommodations}
+          members={members}
+          currentMemberId={currentMemberId}
+          stayArea={stay.area}
+          stayLabel={stay.label}
+          stayNights={nightCount}
+        />
       )}
     </section>
   );

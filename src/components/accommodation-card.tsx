@@ -1,9 +1,13 @@
-// AccommodationCard — a clean Airbnb-style listing card for one candidate stay.
-// Shows a 16:9 cover with a source badge and a rating pill, the parsed name,
-// capacity details (guests / bedrooms / beds / baths), a prominent price with a
-// per-leg budget total, optional notes, the submitter, then votes.
+// AccommodationCard — a wide, two-pane "spread" for one candidate stay, built to
+// be shown one-at-a-time in the leg carousel at ~80vw. On a wide card (@3xl+) the
+// cover image fills the left pane while every detail lives on the right: title,
+// capacity, price + per-leg budget, the per-member "who pays what" comparison,
+// the yes/no vote, who voted, and the Notion-style discussion thread. On a narrow
+// card it stacks (image on top, details below). "Details" opens the richer modal
+// (map, amenities, edit).
 //
-// Shared component: renders on the server, embeds the VoteButtons client island.
+// Rendered inside the client StaySection, so it composes client islands
+// (PriceChart, VoteButtons, CommentThread, the detail dialog) freely.
 
 import Image from "next/image";
 import Link from "next/link";
@@ -11,6 +15,7 @@ import { ImageOff, Star } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { AccommodationDetailDialog } from "@/components/accommodation-detail-dialog";
+import { CommentThread } from "@/components/comment-thread";
 import { PriceChart } from "@/components/price-chart";
 import { VoteButtons } from "@/components/vote-buttons";
 import { VoterChips } from "@/components/voter-chips";
@@ -42,7 +47,7 @@ export function AccommodationCard({
   stayLabel,
   stayNights,
 }: AccommodationCardProps) {
-  const { votes, prices, details } = accommodation;
+  const { votes, prices, comments, details } = accommodation;
 
   // Derive the live tallies + this member's current vote from the joined votes.
   let yesCount = 0;
@@ -71,19 +76,23 @@ export function AccommodationCard({
   );
 
   return (
-    <article className="group/card flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-      {/* Cover — 16:9, with source badge (left) and rating pill (right). */}
-      <div className="relative aspect-video w-full overflow-hidden">
+    // @container on the wrapper so the article (a DESCENDANT) can switch to the
+    // two-pane grid based on the card's own width — an element can't query itself.
+    <div className="@container h-full">
+    <article className="group/card flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-shadow duration-200 hover:shadow-md @3xl:grid @3xl:grid-cols-[1.05fr_1fr] @3xl:items-stretch">
+      {/* Cover — fills the left pane on wide cards, sits on top when stacked.
+          Source badge (left) + rating pill (right) overlaid. */}
+      <div className="relative aspect-video w-full overflow-hidden bg-muted @3xl:aspect-auto @3xl:h-full @3xl:min-h-[24rem]">
         {accommodation.image_url ? (
           <Image
             src={accommodation.image_url}
             alt={title}
             fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            className="object-cover transition-transform duration-500 group-hover/card:scale-105"
+            sizes="(max-width: 960px) 80vw, 600px"
+            className="object-cover transition-transform duration-500 group-hover/card:scale-[1.03]"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-muted">
+          <div className="flex h-full min-h-48 w-full items-center justify-center">
             <ImageOff className="size-10 text-muted-foreground" strokeWidth={1.5} aria-hidden />
           </div>
         )}
@@ -93,8 +102,8 @@ export function AccommodationCard({
         </Badge>
 
         {rating && (
-          <div className="absolute top-3 right-3 flex items-center gap-1 rounded-full border border-border bg-white/90 px-2 py-1 text-xs font-semibold text-foreground shadow-sm">
-            <Star className="size-3 fill-foreground text-foreground" aria-hidden />
+          <div className="absolute top-3 right-3 flex items-center gap-1 rounded-full border border-border bg-white/90 px-2.5 py-1 text-sm font-semibold text-foreground shadow-sm">
+            <Star className="size-3.5 fill-foreground text-foreground" aria-hidden />
             {rating}
             {reviews != null && (
               <span className="font-normal text-muted-foreground">({reviews})</span>
@@ -103,29 +112,38 @@ export function AccommodationCard({
         )}
       </div>
 
-      {/* Body */}
-      <div className="flex flex-1 flex-col gap-2 p-4">
+      {/* Content pane */}
+      <div className="flex min-w-0 flex-1 flex-col gap-4 p-5 sm:p-6">
         {/* Title links out to the original listing in a new tab. */}
-        <Link
-          href={accommodation.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-base leading-snug font-semibold text-foreground transition-colors hover:underline"
-        >
-          <span className="line-clamp-2">{title}</span>
-        </Link>
+        <div className="flex flex-col gap-2">
+          <Link
+            href={accommodation.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xl leading-snug font-semibold tracking-tight text-foreground transition-colors hover:text-primary @3xl:text-2xl"
+          >
+            <span className="line-clamp-2">{title}</span>
+          </Link>
 
-        {/* Capacity details parsed from the listing. */}
-        {chips.length > 0 && (
-          <p className="line-clamp-1 text-sm text-muted-foreground">
-            {chips.join(" · ")}
-          </p>
-        )}
+          {/* Capacity details parsed from the listing. */}
+          {chips.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {chips.map((chip) => (
+                <span
+                  key={chip}
+                  className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground"
+                >
+                  {chip}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Price + per-leg budget total. */}
         {nightly ? (
-          <p className="flex flex-wrap items-baseline gap-x-1.5">
-            <span className="text-base font-semibold text-foreground">{nightly}</span>
+          <p className="flex flex-wrap items-baseline gap-x-2">
+            <span className="text-2xl font-bold tracking-tight text-foreground">{nightly}</span>
             <span className="text-sm text-muted-foreground">/ night</span>
             {total && stayNights != null && (
               <span className="text-sm text-muted-foreground">
@@ -139,27 +157,26 @@ export function AccommodationCard({
 
         {/* Optional notes from whoever added it. */}
         {accommodation.notes?.trim() && (
-          <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+          <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
             {accommodation.notes}
           </p>
         )}
 
-        {/* "Added by" chip, with the submitter's personal color as a dot. */}
-        {submitter && (
-          <div className="flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-            <span
-              className="inline-block size-2 rounded-full"
-              style={{ backgroundColor: submitter.color }}
-              aria-hidden
-            />
-            Added by {submitter.name}
-          </div>
-        )}
+        {/* Submitter + the Details / listing actions. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {submitter ? (
+            <div className="flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              <span
+                className="inline-block size-2 rounded-full"
+                style={{ backgroundColor: submitter.color }}
+                aria-hidden
+              />
+              Added by {submitter.name}
+            </div>
+          ) : (
+            <span />
+          )}
 
-        {/* Push the price comparison + voting controls to the bottom so cards
-            align on a grid. */}
-        <div className="mt-auto flex flex-col gap-3 pt-2">
-          {/* Expand into the full detail + edit dialog (client island). */}
           <AccommodationDetailDialog
             accommodation={accommodation}
             members={members}
@@ -168,18 +185,23 @@ export function AccommodationCard({
             stayLabel={stayLabel}
             stayNights={stayNights}
           />
+        </div>
 
-          {/* Per-member price comparison — who has the best deal & books. */}
-          <PriceChart
-            accommodationId={accommodation.id}
-            members={members}
-            prices={prices}
-            currentMemberId={currentMemberId}
-            referenceAmount={accommodation.price_per_night}
-            currency={accommodation.currency}
-            stayNights={stayNights}
-          />
+        <hr className="border-border" />
 
+        {/* Per-member price comparison — who has the best deal & books. */}
+        <PriceChart
+          accommodationId={accommodation.id}
+          members={members}
+          prices={prices}
+          currentMemberId={currentMemberId}
+          referenceAmount={accommodation.price_per_night}
+          currency={accommodation.currency}
+          stayNights={stayNights}
+        />
+
+        {/* Vote + who voted. */}
+        <div className="flex flex-col gap-3">
           <VoteButtons
             accommodationId={accommodation.id}
             currentMemberId={currentMemberId}
@@ -189,7 +211,20 @@ export function AccommodationCard({
           />
           <VoterChips votes={votes} members={members} />
         </div>
+
+        <hr className="border-border" />
+
+        {/* Notion-style discussion — say WHY it's a yes or no. */}
+        <CommentThread
+          accommodationId={accommodation.id}
+          comments={comments}
+          members={members}
+          votes={votes}
+          currentMemberId={currentMemberId}
+          variant="card"
+        />
       </div>
     </article>
+    </div>
   );
 }
