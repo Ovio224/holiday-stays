@@ -95,13 +95,11 @@ export function useRealtimeBoard({
     useState<AccommodationWithVotes[]>(initialAccommodations);
   const [members, setMembers] = useState<Member[]>(initialMembers);
 
-  // Re-seed if the server hands us a fresh snapshot (e.g. after navigation).
-  useEffect(() => {
-    setAccommodations(initialAccommodations);
-  }, [initialAccommodations]);
-  useEffect(() => {
-    setMembers(initialMembers);
-  }, [initialMembers]);
+  // State seeds once from the server snapshot (the useState initializers above);
+  // after mount the realtime subscription below is the source of truth. Landing
+  // on the board is always a fresh navigation that remounts this hook, so a new
+  // server snapshot is picked up naturally — no re-seeding effect needed (and
+  // re-seeding would risk clobbering a freshly-applied realtime change).
 
   useEffect(() => {
     const supabase = getBrowserClient();

@@ -48,21 +48,17 @@ export function SubmitSheet({
 
   // Form field state.
   const [url, setUrl] = React.useState("");
-  const [stayId, setStayId] = React.useState<string | null>(null);
   const [title, setTitle] = React.useState("");
   const [priceText, setPriceText] = React.useState("");
   const [notes, setNotes] = React.useState("");
 
-  // The stay select's value falls back to the requested default, then the
-  // first stay. Re-sync whenever the sheet opens with a new preset.
+  // The selected stay is DERIVED (not synced via an effect): until the user
+  // explicitly picks one, it falls back to the requested preset, then the first
+  // stay. `stayOverride` is cleared when the sheet closes, so reopening for a
+  // different leg naturally adopts the new preset.
   const resolvedDefaultStayId = defaultStayId ?? stays[0]?.id ?? null;
-
-  React.useEffect(() => {
-    // Re-seed the stay selection whenever the sheet opens or the preset changes.
-    if (open) {
-      setStayId(resolvedDefaultStayId);
-    }
-  }, [open, resolvedDefaultStayId]);
+  const [stayOverride, setStayOverride] = React.useState<string | null>(null);
+  const stayId = stayOverride ?? resolvedDefaultStayId;
 
   // Build the items map so <SelectValue> can render a stay's label by value.
   const stayItems = React.useMemo(
@@ -75,7 +71,14 @@ export function SubmitSheet({
     setTitle("");
     setPriceText("");
     setNotes("");
-    setStayId(resolvedDefaultStayId);
+    setStayOverride(null);
+  }
+
+  // Reset fields whenever the sheet closes so the next open starts fresh and
+  // adopts its new preset stay via the derived value above.
+  function handleOpenChange(next: boolean) {
+    if (!next) resetForm();
+    onOpenChange(next);
   }
 
   const trimmedUrl = url.trim();
@@ -111,20 +114,20 @@ export function SubmitSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
         side="bottom"
-        className="glass-strong max-h-[92dvh] gap-0 overflow-y-auto rounded-t-3xl border-t-0 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+        className="max-h-[92dvh] gap-0 overflow-y-auto rounded-t-2xl border-t border-border bg-card pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-sm"
       >
         {/* Grab handle for the bottom-sheet feel */}
-        <div className="mx-auto mt-3 mb-1 h-1.5 w-12 rounded-full bg-foreground/15" />
+        <div className="mx-auto mt-3 mb-1 h-1.5 w-12 rounded-full bg-border" />
 
         <SheetHeader className="px-5 pt-1 text-center sm:text-left">
-          <SheetTitle className="text-xl text-gradient-sea sm:text-2xl">
+          <SheetTitle className="text-xl font-semibold text-foreground sm:text-2xl">
             Add a place
           </SheetTitle>
-          <SheetDescription>
-            Paste a link and we&rsquo;ll tidy it up for the crew.
+          <SheetDescription className="text-muted-foreground">
+            Paste a link to add it to the board.
           </SheetDescription>
         </SheetHeader>
 
@@ -134,7 +137,7 @@ export function SubmitSheet({
         >
           {/* URL — the star of the form */}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="submit-url" className="text-foreground/80">
+            <Label htmlFor="submit-url" className="text-sm font-medium text-foreground">
               Link
             </Label>
             <Input
@@ -149,24 +152,24 @@ export function SubmitSheet({
               placeholder="https://airbnb.com/rooms/…"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              className="h-14 rounded-2xl bg-card/70 px-4 text-base shadow-sm"
+              className="h-14 rounded-lg px-4 text-base"
             />
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <SparklesIcon className="size-3.5 text-sunset" />
-              We will try to grab the photo &amp; price automatically.
+              <SparklesIcon className="size-3.5 text-muted-foreground" />
+              We will try to fetch the photo and details automatically.
             </p>
           </div>
 
           {/* Which stay this belongs to */}
           <div className="flex flex-col gap-2">
-            <Label className="text-foreground/80">Which stay?</Label>
+            <Label className="text-sm font-medium text-foreground">Stay</Label>
             <Select
               items={stayItems}
               value={stayId}
-              onValueChange={(value) => setStayId(value as string | null)}
+              onValueChange={(value) => setStayOverride(value as string | null)}
             >
-              <SelectTrigger className="h-12 w-full rounded-2xl bg-card/70 px-4 text-base">
-                <MapPinIcon className="size-4 text-lagoon" />
+              <SelectTrigger className="h-12 w-full rounded-lg px-4 text-base">
+                <MapPinIcon className="size-4 text-muted-foreground" />
                 <SelectValue placeholder="Pick a stay" />
               </SelectTrigger>
               <SelectContent>
@@ -185,7 +188,7 @@ export function SubmitSheet({
 
           {/* Optional extras */}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="submit-title" className="text-foreground/80">
+            <Label htmlFor="submit-title" className="text-sm font-medium text-foreground">
               Title{" "}
               <span className="font-normal text-muted-foreground">
                 (optional)
@@ -196,12 +199,12 @@ export function SubmitSheet({
               placeholder="Cliffside villa with a pool"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="h-12 rounded-2xl bg-card/70 px-4 text-base"
+              className="h-12 rounded-lg px-4 text-base"
             />
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="submit-price" className="text-foreground/80">
+            <Label htmlFor="submit-price" className="text-sm font-medium text-foreground">
               Price{" "}
               <span className="font-normal text-muted-foreground">
                 (optional)
@@ -213,12 +216,12 @@ export function SubmitSheet({
               placeholder="€120 / night"
               value={priceText}
               onChange={(e) => setPriceText(e.target.value)}
-              className="h-12 rounded-2xl bg-card/70 px-4 text-base"
+              className="h-12 rounded-lg px-4 text-base"
             />
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="submit-notes" className="text-foreground/80">
+            <Label htmlFor="submit-notes" className="text-sm font-medium text-foreground">
               Notes{" "}
               <span className="font-normal text-muted-foreground">
                 (optional)
@@ -229,13 +232,13 @@ export function SubmitSheet({
               placeholder="Walking distance to the beach, sleeps 6…"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="min-h-20 rounded-2xl bg-card/70 px-4 py-3 text-base"
+              className="min-h-20 rounded-lg px-4 py-3 text-base"
             />
           </div>
 
           {/* Helper when the visitor has no identity yet */}
           {!currentMemberId && (
-            <p className="rounded-2xl bg-mango/15 px-4 py-3 text-sm text-foreground/70">
+            <p className="rounded-lg bg-muted px-4 py-3 text-sm text-foreground">
               Pick who you are first to start adding places.
             </p>
           )}
@@ -243,7 +246,7 @@ export function SubmitSheet({
           <Button
             type="submit"
             disabled={!canSubmit}
-            className="mt-1 mb-2 h-14 w-full rounded-2xl bg-grad-sea text-base font-semibold text-white shadow-lg shadow-ocean/25 hover:opacity-95"
+            className="mt-1 mb-2 h-14 w-full rounded-lg bg-primary text-base font-semibold text-white hover:bg-[#e00b41]"
           >
             {isPending ? "Adding…" : "Add to the board"}
           </Button>

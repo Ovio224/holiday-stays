@@ -64,63 +64,55 @@ export function GateForm() {
 
   return (
     <div className="w-full max-w-md animate-pop-in">
-      {/* Tropical hero */}
-      <div className="mb-6 flex flex-col items-center text-center">
-        <div className="mb-3 text-6xl drop-shadow-sm" aria-hidden>
-          🏝️
-        </div>
-        <h1 className="font-heading text-4xl font-extrabold text-gradient-sunset sm:text-5xl">
-          Bali Stays
-        </h1>
-        <p className="mt-2 text-base text-foreground/70">
-          Our trip&rsquo;s little corner of paradise. Enter the code to join the
-          crew.
-        </p>
-      </div>
-
-      <form
-        onSubmit={handleSubmit}
-        className={[
-          "glass flex flex-col gap-4 rounded-3xl border-0 bg-card/60 p-6 shadow-[0_30px_70px_-40px_var(--ocean)]",
-          shake ? "animate-[gate-shake_0.4s_ease-in-out]" : "",
-        ].join(" ")}
-      >
-        <label htmlFor="gate-code" className="sr-only">
-          Trip code
-        </label>
-        <Input
-          id="gate-code"
-          name="code"
-          type="text"
-          inputMode="text"
-          autoComplete="off"
-          autoCapitalize="characters"
-          autoCorrect="off"
-          spellCheck={false}
-          autoFocus
-          aria-invalid={Boolean(error)}
-          placeholder="Enter trip code"
-          onChange={() => error && setError(null)}
-          className="h-16 rounded-2xl bg-card/70 px-5 text-center text-xl font-semibold tracking-[0.18em] shadow-sm placeholder:tracking-normal placeholder:font-normal"
-        />
-
-        {error && (
-          <p
-            role="alert"
-            className="text-center text-sm font-medium text-no"
-          >
-            {error}
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm sm:p-8">
+        <div className="mb-6 text-center">
+          <h1 className="text-3xl font-bold text-primary">Bali Stays</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Enter your trip code to continue.
           </p>
-        )}
+        </div>
 
-        <Button
-          type="submit"
-          disabled={isPending}
-          className="h-16 w-full rounded-2xl bg-grad-sea text-lg font-semibold text-white shadow-lg shadow-ocean/25 hover:opacity-95"
+        <form
+          onSubmit={handleSubmit}
+          className={[
+            "flex flex-col gap-4",
+            shake ? "animate-[gate-shake_0.4s_ease-in-out]" : "",
+          ].join(" ")}
         >
-          {isPending ? "Checking…" : "Enter"}
-        </Button>
-      </form>
+          <label htmlFor="gate-code" className="sr-only">
+            Trip code
+          </label>
+          <Input
+            id="gate-code"
+            name="code"
+            type="text"
+            inputMode="text"
+            autoComplete="off"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            autoFocus
+            aria-invalid={Boolean(error)}
+            placeholder="Trip code"
+            onChange={() => error && setError(null)}
+            className="h-14 rounded-lg px-4 text-center text-lg font-medium tracking-[0.08em] placeholder:font-normal placeholder:tracking-normal"
+          />
+
+          {error && (
+            <p role="alert" className="text-center text-sm font-medium text-destructive">
+              {error}
+            </p>
+          )}
+
+          <Button
+            type="submit"
+            disabled={isPending}
+            className="h-12 w-full rounded-lg bg-primary text-base font-semibold text-white hover:bg-[#e00b41]"
+          >
+            {isPending ? "Checking…" : "Enter"}
+          </Button>
+        </form>
+      </div>
 
       {/* Local keyframes for the wrong-code shake. */}
       <style>{`

@@ -1,7 +1,7 @@
 "use client";
 
-// VoteButtons — the two big, thumb-friendly pills at the heart of the board.
-// YES (thumbs up, palm green when active) and NO (thumbs down, coral when
+// VoteButtons — the two thumb-friendly pills at the heart of the board.
+// YES (thumbs up, green when active) and NO (thumbs down, ink when
 // active). Each shows its live count. Tapping casts a vote optimistically:
 // we flip the local UI immediately inside a transition, then reconcile with
 // the server. If no member is selected yet we disable and nudge the user to
@@ -87,7 +87,7 @@ export function VoteButtons({
         onClick={() => handleVote(true)}
         label="Vote yes"
       >
-        <ThumbsUp className="size-5" strokeWidth={2.5} aria-hidden />
+        <ThumbsUp className="size-4" strokeWidth={2} aria-hidden />
       </VotePill>
 
       <VotePill
@@ -99,7 +99,7 @@ export function VoteButtons({
         onClick={() => handleVote(false)}
         label="Vote no"
       >
-        <ThumbsDown className="size-5" strokeWidth={2.5} aria-hidden />
+        <ThumbsDown className="size-4" strokeWidth={2} aria-hidden />
       </VotePill>
     </div>
   );
@@ -117,9 +117,9 @@ interface VotePillProps {
 }
 
 /**
- * A single large vote pill (>= 48px tall → comfortably above the 44px touch
- * target floor). Inactive pills are soft tinted glass; the active pill flips to
- * a solid yes/no fill and pops in.
+ * A single vote pill (>= 48px tall → comfortably above the 44px touch target
+ * floor). Inactive pills are clean white with a hairline border; the active
+ * pill flips to a solid yes/no fill and pops in subtly.
  */
 function VotePill({
   tone,
@@ -132,13 +132,9 @@ function VotePill({
   children,
 }: VotePillProps) {
   const activeFill =
-    tone === "yes"
-      ? "bg-yes text-white shadow-[0_8px_20px_-8px] shadow-yes/70"
-      : "bg-no text-white shadow-[0_8px_20px_-8px] shadow-no/70";
+    tone === "yes" ? "bg-yes text-white" : "bg-no text-white";
   const idleFill =
-    tone === "yes"
-      ? "bg-yes/10 text-yes hover:bg-yes/20"
-      : "bg-no/10 text-no hover:bg-no/20";
+    "border border-border bg-white text-foreground hover:bg-muted";
 
   return (
     <button
@@ -148,17 +144,23 @@ function VotePill({
       aria-pressed={active}
       aria-label={label}
       className={cn(
-        "flex min-h-12 items-center justify-center gap-2 rounded-2xl px-4 py-3",
-        "text-base font-bold transition-all duration-200 outline-none select-none",
-        "focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+        "flex min-h-12 items-center justify-center gap-2 rounded-full px-4 py-3",
+        "text-base font-semibold transition-all duration-200 outline-none select-none",
+        "focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-card focus-visible:ring-ring/50",
         "active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60",
-        tone === "yes" ? "focus-visible:ring-yes/60" : "focus-visible:ring-no/60",
         active ? activeFill : idleFill,
         popped && "animate-pop-in"
       )}
     >
       {children}
-      <span className="tabular-nums">{count}</span>
+      <span
+        className={cn(
+          "tabular-nums",
+          !active && "text-muted-foreground"
+        )}
+      >
+        {count}
+      </span>
     </button>
   );
 }

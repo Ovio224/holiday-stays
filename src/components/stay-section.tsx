@@ -8,7 +8,7 @@
 // This is a client component because it surfaces the onAdd callback that the
 // parent board wires up to open the add-link sheet.
 
-import { MapPin, Plus } from "lucide-react";
+import { CalendarDays, MapPin, Plus } from "lucide-react";
 
 import { AccommodationCard } from "@/components/accommodation-card";
 import { Button } from "@/components/ui/button";
@@ -42,19 +42,20 @@ export function StaySection({
       {/* Leg header — label + date/nights meta on the left, add on the right. */}
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1.5">
-          <h2 className="font-heading text-2xl font-bold leading-tight text-foreground">
+          <h2 className="text-xl font-semibold leading-tight text-foreground">
             {stay.label}
           </h2>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             {stay.area && (
-              <span className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
                 <MapPin className="size-3.5" aria-hidden />
                 {stay.area}
               </span>
             )}
             {metaParts.length > 0 && (
-              <span className="inline-flex items-center rounded-full bg-grad-sunset px-3 py-1 text-xs font-semibold text-white shadow-sm">
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 font-medium text-foreground">
+                <CalendarDays className="size-3.5 text-muted-foreground" aria-hidden />
                 {metaParts.join(" · ")}
               </span>
             )}
@@ -63,7 +64,7 @@ export function StaySection({
 
         <Button
           onClick={() => onAdd(stay.id)}
-          className="min-h-11 rounded-2xl bg-grad-sea px-4 text-sm font-semibold text-white shadow-md transition-transform hover:-translate-y-0.5 hover:bg-grad-sea"
+          className="min-h-11 rounded-lg border border-foreground/30 bg-white px-4 text-sm font-semibold text-foreground shadow-none hover:bg-muted"
         >
           <Plus className="size-4" aria-hidden />
           Add a place
@@ -71,17 +72,15 @@ export function StaySection({
       </header>
 
       {accommodations.length === 0 ? (
-        // Empty state — an inviting frosted tile rather than a dead gap.
-        <div className="glass flex flex-col items-center gap-3 rounded-3xl px-6 py-10 text-center">
-          <span className="text-4xl" aria-hidden>
-            🏝️
-          </span>
+        // Empty state — a clean bordered tile rather than a dead gap.
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-muted/40 px-6 py-10 text-center">
+          <MapPin className="size-6 text-muted-foreground" aria-hidden />
           <p className="max-w-xs text-sm text-muted-foreground">
-            No places yet — drop the first Airbnb or Booking link for this leg.
+            No places yet — paste the first Airbnb or Booking link.
           </p>
           <Button
             onClick={() => onAdd(stay.id)}
-            className="min-h-11 rounded-2xl bg-grad-sea px-4 text-sm font-semibold text-white shadow-md hover:bg-grad-sea"
+            className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-[#e00b41]"
           >
             <Plus className="size-4" aria-hidden />
             Add the first place

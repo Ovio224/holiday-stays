@@ -67,23 +67,20 @@ export function NamePicker({ members }: NamePickerProps) {
   }
 
   return (
-    <Card className="glass w-full max-w-md rounded-3xl border-0 bg-card/60 p-2 ring-0 shadow-[0_30px_70px_-40px_var(--ocean)] animate-pop-in">
-      <CardHeader className="items-center gap-1 px-6 pt-6 text-center">
-        <div className="mb-1 text-4xl" aria-hidden>
-          🌺
-        </div>
-        <CardTitle className="text-2xl text-gradient-sea">
+    <Card className="w-full max-w-md rounded-xl border border-border bg-card p-2 shadow-sm animate-pop-in">
+      <CardHeader className="gap-1 px-6 pt-6">
+        <CardTitle className="text-2xl font-semibold text-foreground">
           Who are you?
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Tap your name so the crew knows whose votes are whose.
+          Choose your name so votes are attributed correctly.
         </p>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-6 px-6 pb-6">
-        {/* Existing members as big tappable chips */}
+        {/* Existing members as tappable chips */}
         {members.length > 0 && (
-          <div className="flex flex-wrap justify-center gap-3">
+          <div className="flex flex-wrap gap-2.5">
             {members.map((member) => {
               const busy = pendingMemberId === member.id;
               return (
@@ -92,7 +89,7 @@ export function NamePicker({ members }: NamePickerProps) {
                   type="button"
                   onClick={() => handleSelect(member)}
                   disabled={isPending}
-                  className="flex min-h-12 items-center gap-2.5 rounded-full bg-card/80 py-2 pr-4 pl-2 text-base font-medium shadow-sm ring-1 ring-foreground/10 transition-all hover:bg-card hover:shadow-md active:translate-y-px disabled:opacity-60 data-[busy=true]:opacity-70"
+                  className="flex min-h-12 items-center gap-2.5 rounded-full border border-border bg-white py-2 pr-4 pl-2 text-base font-medium text-foreground transition-colors hover:bg-muted active:translate-y-px disabled:opacity-60 data-[busy=true]:opacity-70"
                   data-busy={busy}
                   aria-label={`Continue as ${member.name}`}
                 >
@@ -113,14 +110,14 @@ export function NamePicker({ members }: NamePickerProps) {
         {members.length > 0 && (
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="h-px flex-1 bg-border" />
-            new here?
+            or
             <span className="h-px flex-1 bg-border" />
           </div>
         )}
 
         {/* Join as a brand-new member */}
         <form onSubmit={handleJoin} className="flex flex-col gap-3">
-          <Label htmlFor="join-name" className="text-foreground/80">
+          <Label htmlFor="join-name" className="text-foreground">
             Your name
           </Label>
           <Input
@@ -130,14 +127,14 @@ export function NamePicker({ members }: NamePickerProps) {
             onChange={(e) => setName(e.target.value)}
             autoComplete="off"
             maxLength={40}
-            className="h-14 rounded-2xl bg-card/70 px-4 text-base shadow-sm"
+            className="h-12 rounded-lg px-4 text-base"
           />
           <Button
             type="submit"
             disabled={!canJoin}
-            className="h-14 w-full rounded-2xl bg-grad-sunset text-base font-semibold text-white shadow-lg shadow-sunset/25 hover:opacity-95"
+            className="h-12 w-full rounded-lg bg-primary text-base font-semibold text-white hover:bg-[#e00b41]"
           >
-            {trimmedName ? `Join as ${trimmedName}` : "Join the trip"}
+            {trimmedName ? `Continue as ${trimmedName}` : "Join the trip"}
           </Button>
         </form>
       </CardContent>

@@ -5,7 +5,7 @@
 // as a StaySection, and owns the "add a place" bottom-sheet.
 
 import * as React from "react";
-import { PlusIcon } from "lucide-react";
+import { CalendarDays, PlusIcon } from "lucide-react";
 
 import type { Stay, AccommodationWithVotes, Member } from "@/lib/types";
 import { useRealtimeBoard } from "@/hooks/use-realtime-board";
@@ -76,22 +76,23 @@ export function TripBoard({
 
   return (
     <div className="relative">
-      <header className="mx-auto mb-8 w-full max-w-2xl px-4 text-center sm:px-6">
-        <p className="mb-2 text-sm font-medium tracking-wide text-foreground/60 uppercase">
+      <header className="mx-auto mb-8 w-full max-w-2xl px-4 sm:px-6">
+        <p className="mb-2 text-sm text-muted-foreground">
           {friendCount === 1
             ? "Just you, for now"
             : `${friendCount} friends · ${placeCount} ${placeCount === 1 ? "place" : "places"}`}
         </p>
-        <h1 className="font-heading text-5xl font-extrabold text-gradient-sunset sm:text-6xl">
+        <h1 className="text-4xl font-bold tracking-tight text-primary sm:text-5xl">
           Bali Stays
         </h1>
-        <p className="mt-3 text-base text-foreground/70 sm:text-lg">
-          Drop the places you love, vote yes or no, and let&rsquo;s find our
-          home base together. 🌴
+        <p className="mt-3 text-base text-muted-foreground">
+          Add the places you love, vote yes or no, and find your home base
+          together.
         </p>
         {tripRange && (
-          <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-card/60 px-4 py-1.5 text-sm font-medium text-foreground/80 ring-1 ring-foreground/10 backdrop-blur">
-            🗓️ {tripRange}
+          <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-muted px-4 py-1.5 text-sm font-medium text-foreground">
+            <CalendarDays className="size-4 text-muted-foreground" aria-hidden />
+            {tripRange}
           </p>
         )}
       </header>
@@ -114,7 +115,7 @@ export function TripBoard({
         type="button"
         onClick={openSubmitBlank}
         aria-label="Add a place"
-        className="fixed right-5 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-40 flex h-14 items-center gap-2 rounded-full bg-grad-sunset pr-5 pl-4 text-base font-semibold text-white shadow-xl shadow-sunset/30 transition-transform active:translate-y-px sm:right-8 sm:bottom-8"
+        className="fixed right-5 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-40 flex h-12 items-center gap-2 rounded-full bg-primary pr-5 pl-4 text-base font-semibold text-white shadow-md transition-colors hover:bg-[#e00b41] active:translate-y-px sm:right-8 sm:bottom-8"
       >
         <PlusIcon className="size-6" />
         <span className="pr-0.5">Add a place</span>

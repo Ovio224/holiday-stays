@@ -5,7 +5,7 @@ import { GateForm } from "@/components/gate-form";
 
 export default function GatePage() {
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center px-5 py-12">
+    <main className="flex min-h-dvh flex-col items-center justify-center bg-background px-6 py-12">
       <GateForm />
     </main>
   );

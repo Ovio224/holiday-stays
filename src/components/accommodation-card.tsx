@@ -1,6 +1,6 @@
-// AccommodationCard — a premium frosted-glass card for one candidate stay.
-// Shows a 16:9 cover (with a tropical placeholder when imageless), a colored
-// source badge, the title as an external link, an optional price pill + notes,
+// AccommodationCard — a clean Airbnb-style listing card for one candidate stay.
+// Shows a 16:9 cover (with a neutral placeholder when imageless), a subtle
+// source badge, the title as an external link, an optional inline price + notes,
 // the submitter chip, and finally the vote pills + voter clusters.
 //
 // This is a shared component: it renders fine on the server and embeds the
@@ -8,31 +8,18 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ExternalLink, Palmtree } from "lucide-react";
+import { ImageOff } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { VoteButtons } from "@/components/vote-buttons";
 import { VoterChips } from "@/components/voter-chips";
 import { sourceLabel } from "@/lib/format";
-import { cn } from "@/lib/utils";
-import type { AccommodationSource, AccommodationWithVotes, Member } from "@/lib/types";
+import type { AccommodationWithVotes, Member } from "@/lib/types";
 
 interface AccommodationCardProps {
   accommodation: AccommodationWithVotes;
   members: Member[];
   currentMemberId: string | null;
-}
-
-/** Source badge tint — Airbnb coral/hibiscus, Booking ocean blue, else lagoon. */
-function sourceBadgeClass(source: AccommodationSource): string {
-  switch (source) {
-    case "airbnb":
-      return "bg-hibiscus/15 text-hibiscus";
-    case "booking":
-      return "bg-ocean/15 text-ocean";
-    default:
-      return "bg-lagoon/20 text-lagoon";
-  }
 }
 
 export function AccommodationCard({
@@ -59,9 +46,9 @@ export function AccommodationCard({
   const title = accommodation.title?.trim() || "Untitled stay";
 
   return (
-    <article className="group/card glass animate-pop-in flex flex-col overflow-hidden rounded-3xl transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_50px_-28px_var(--ocean)]">
-      {/* Cover — 16:9. Real image when we have one, otherwise a sea-gradient
-          panel with a friendly palm so empty cards still feel intentional. */}
+    <article className="group/card flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+      {/* Cover — 16:9. Real image when we have one, otherwise a neutral
+          placeholder so empty cards still read as intentional. */}
       <div className="relative aspect-video w-full overflow-hidden">
         {accommodation.image_url ? (
           <Image
@@ -72,47 +59,38 @@ export function AccommodationCard({
             className="object-cover transition-transform duration-500 group-hover/card:scale-105"
           />
         ) : (
-          <div className="bg-grad-sea flex h-full w-full items-center justify-center">
-            <Palmtree
-              className="size-12 text-white/80 drop-shadow"
-              strokeWidth={1.75}
+          <div className="flex h-full w-full items-center justify-center bg-muted">
+            <ImageOff
+              className="size-10 text-muted-foreground"
+              strokeWidth={1.5}
               aria-hidden
             />
           </div>
         )}
 
-        {/* Source badge floats over the image for a polished overlay feel. */}
-        <Badge
-          className={cn(
-            "absolute top-3 left-3 backdrop-blur-md shadow-sm",
-            sourceBadgeClass(accommodation.source)
-          )}
-        >
+        {/* Source badge floats over the image as a subtle white pill. */}
+        <Badge className="absolute top-3 left-3 border border-border bg-white/90 text-foreground shadow-sm">
           {sourceLabel(accommodation.source)}
         </Badge>
       </div>
 
       {/* Body */}
-      <div className="flex flex-1 flex-col gap-3 p-4">
+      <div className="flex flex-1 flex-col gap-2 p-4">
         {/* Title links out to the original listing in a new tab. */}
         <Link
           href={accommodation.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="group/title flex items-start gap-1.5 font-heading text-lg leading-snug font-semibold text-foreground transition-colors hover:text-ocean"
+          className="text-base leading-snug font-semibold text-foreground transition-colors hover:underline"
         >
           <span className="line-clamp-2">{title}</span>
-          <ExternalLink
-            className="mt-1 size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/title:opacity-100"
-            aria-hidden
-          />
         </Link>
 
-        {/* Price pill — only when we actually have a price. */}
+        {/* Price — shown inline in bold ink, Airbnb-style. */}
         {accommodation.price_text && (
-          <span className="w-fit rounded-full bg-sunset/15 px-3 py-1 text-sm font-semibold text-sunset">
+          <p className="text-sm font-semibold text-foreground">
             {accommodation.price_text}
-          </span>
+          </p>
         )}
 
         {/* Optional notes from whoever added it. */}
@@ -122,26 +100,20 @@ export function AccommodationCard({
           </p>
         )}
 
-        {/* "added by" chip, tinted with the submitter's personal color. */}
+        {/* "added by" chip, with the submitter's personal color as a dot. */}
         {submitter && (
-          <div
-            className="flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
-            style={{
-              backgroundColor: `color-mix(in oklab, ${submitter.color} 16%, transparent)`,
-              color: submitter.color,
-            }}
-          >
+          <div className="flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
             <span
               className="inline-block size-2 rounded-full"
               style={{ backgroundColor: submitter.color }}
               aria-hidden
             />
-            added by {submitter.name}
+            Added by {submitter.name}
           </div>
         )}
 
         {/* Push the voting controls to the bottom so cards align on a grid. */}
-        <div className="mt-auto flex flex-col gap-3 pt-1">
+        <div className="mt-auto flex flex-col gap-3 pt-2">
           <VoteButtons
             accommodationId={accommodation.id}
             currentMemberId={currentMemberId}

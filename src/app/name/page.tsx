@@ -12,7 +12,7 @@ export default async function NamePage() {
   const members = await getMembers();
 
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center px-5 py-12">
+    <main className="flex min-h-dvh flex-col items-center justify-center bg-background px-6 py-12">
       <NamePicker members={members} />
     </main>
   );

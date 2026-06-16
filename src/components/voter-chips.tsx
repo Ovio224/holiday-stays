@@ -1,6 +1,6 @@
-// VoterChips — a compact, delightful readout of who voted which way.
-// Two overlapping mini-avatar clusters: yes-voters get a palm/green ring,
-// no-voters a coral/clay ring. Each circle shows a member's initials over
+// VoterChips — a compact readout of who voted which way.
+// Two overlapping mini-avatar clusters: yes-voters get a green ring,
+// no-voters an ink ring. Each circle shows a member's initials over
 // their personal color. Empty clusters are hidden. This is a pure shared
 // component (no hooks, no client state) — safe to render on the server.
 
@@ -16,7 +16,7 @@ interface VoterChipsProps {
 interface ClusterProps {
   /** Members who voted this way, already resolved + ordered. */
   voters: Member[];
-  /** Tone of the surrounding ring — yes = palm green, no = coral clay. */
+  /** Tone of the surrounding ring — yes = green, no = ink. */
   tone: "yes" | "no";
 }
 
@@ -27,13 +27,12 @@ interface ClusterProps {
 function Cluster({ voters, tone }: ClusterProps) {
   if (voters.length === 0) return null;
 
-  const ringClass = tone === "yes" ? "ring-yes/70" : "ring-no/70";
-  const countClass = tone === "yes" ? "text-yes" : "text-no";
+  const ringClass = tone === "yes" ? "ring-yes" : "ring-no";
 
   return (
     <div className="flex items-center gap-1.5">
-      {/* Overlapping initials — the avatars lean on each other for a cozy,
-          group-photo feel. The white outer ring lifts them off the card. */}
+      {/* Overlapping initials — a thin colored ring marks the cluster's tone
+          while keeping each member's personal color. */}
       <div className="flex -space-x-2">
         {voters.map((member) => (
           <span
@@ -41,8 +40,8 @@ function Cluster({ voters, tone }: ClusterProps) {
             title={member.name}
             style={{ backgroundColor: member.color }}
             className={cn(
-              "inline-flex size-7 items-center justify-center rounded-full text-[0.7rem] font-semibold text-white",
-              "ring-2 shadow-sm ring-offset-1 ring-offset-card",
+              "inline-flex size-6 items-center justify-center rounded-full text-[0.65rem] font-semibold text-white",
+              "ring-2 ring-offset-1 ring-offset-card",
               ringClass
             )}
           >
@@ -50,7 +49,7 @@ function Cluster({ voters, tone }: ClusterProps) {
           </span>
         ))}
       </div>
-      <span className={cn("text-xs font-bold tabular-nums", countClass)}>
+      <span className="text-xs font-medium tabular-nums text-muted-foreground">
         {voters.length}
       </span>
     </div>
