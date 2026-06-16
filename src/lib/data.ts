@@ -6,6 +6,7 @@ import type {
   Stay,
   Member,
   Accommodation,
+  AccommodationPrice,
   Vote,
   AccommodationWithVotes,
 } from "@/lib/types";
@@ -41,12 +42,14 @@ export async function getMembers(): Promise<Member[]> {
   return (data ?? []) as Member[];
 }
 
-// Shape of an accommodation row with its joined votes. `select("*, votes(*)")`
-// returns every column — including the new `price_per_night`, `currency`, and
-// the `details` jsonb (decoded to a ListingDetails object or null via the
-// Accommodation type). The votes relation may come back as null/undefined from
-// PostgREST, so we normalize it to an array below.
-type AccommodationRow = Accommodation & { votes: Vote[] | null };
+// Shape of an accommodation row with its joined votes + per-member prices.
+// `select("*, votes(*), accommodation_prices(*)")` returns every column — incl.
+// `price_per_night`, `currency`, and the `details` jsonb. The embedded relations
+// may come back as null/undefined from PostgREST, so we normalize them to arrays.
+type AccommodationRow = Accommodation & {
+  votes: Vote[] | null;
+  accommodation_prices: AccommodationPrice[] | null;
+};
 
 /**
  * Everything the board needs in one shot: stays, accommodations (with their
@@ -67,7 +70,7 @@ export async function getBoardData(): Promise<{
       .order("created_at", { ascending: true }),
     supabase
       .from("accommodations")
-      .select("*, votes(*)")
+      .select("*, votes(*), accommodation_prices(*)")
       .order("created_at", { ascending: true }),
     supabase
       .from("members")
@@ -90,12 +93,13 @@ export async function getBoardData(): Promise<{
   const stays = (staysResult.data ?? []) as Stay[];
   const members = (membersResult.data ?? []) as Member[];
 
-  // Ensure votes is always an array, even if PostgREST returns null.
+  // Ensure votes + prices are always arrays, even if PostgREST returns null.
   const accommodations: AccommodationWithVotes[] = (
     (accommodationsResult.data ?? []) as AccommodationRow[]
-  ).map((row) => ({
+  ).map(({ accommodation_prices, ...row }) => ({
     ...row,
     votes: row.votes ?? [],
+    prices: accommodation_prices ?? [],
   }));
 
   return { stays, accommodations, members };

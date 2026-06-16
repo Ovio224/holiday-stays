@@ -46,6 +46,23 @@ export interface Vote {
   updated_at: string;
 }
 
+/**
+ * One member's real, personal price for an accommodation — the price they see
+ * when logged into their own account (Genius level, loyalty, regional pricing,
+ * coupons…), layered on top of the parsed "standard" price_per_night. Stored per
+ * night, so it compares apples-to-apples with the reference price. One row per
+ * (accommodation, member), upserted exactly like a Vote.
+ */
+export interface AccommodationPrice {
+  id: string;
+  accommodation_id: string;
+  member_id: string;
+  amount: number; // per night, in `currency`
+  currency: string | null;
+  note: string | null;
+  updated_at: string;
+}
+
 /** Structured details parsed from a listing (rating + capacity). */
 export interface ListingDetails {
   rating: number | null; // e.g. 4.82
@@ -66,7 +83,9 @@ export interface ParsedListing {
   details: ListingDetails;
 }
 
-// View model the board renders: an accommodation with its votes joined in.
+// View model the board renders: an accommodation with its votes and the per-member
+// prices joined in. (Name kept for continuity — it now carries prices too.)
 export interface AccommodationWithVotes extends Accommodation {
   votes: Vote[];
+  prices: AccommodationPrice[];
 }

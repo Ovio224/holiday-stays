@@ -10,6 +10,7 @@ import Link from "next/link";
 import { ImageOff, Star } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { PriceChart } from "@/components/price-chart";
 import { VoteButtons } from "@/components/vote-buttons";
 import { VoterChips } from "@/components/voter-chips";
 import {
@@ -35,7 +36,7 @@ export function AccommodationCard({
   currentMemberId,
   stayNights,
 }: AccommodationCardProps) {
-  const { votes, details } = accommodation;
+  const { votes, prices, details } = accommodation;
 
   // Derive the live tallies + this member's current vote from the joined votes.
   let yesCount = 0;
@@ -149,8 +150,20 @@ export function AccommodationCard({
           </div>
         )}
 
-        {/* Push the voting controls to the bottom so cards align on a grid. */}
+        {/* Push the price comparison + voting controls to the bottom so cards
+            align on a grid. */}
         <div className="mt-auto flex flex-col gap-3 pt-2">
+          {/* Per-member price comparison — who has the best deal & books. */}
+          <PriceChart
+            accommodationId={accommodation.id}
+            members={members}
+            prices={prices}
+            currentMemberId={currentMemberId}
+            referenceAmount={accommodation.price_per_night}
+            currency={accommodation.currency}
+            stayNights={stayNights}
+          />
+
           <VoteButtons
             accommodationId={accommodation.id}
             currentMemberId={currentMemberId}

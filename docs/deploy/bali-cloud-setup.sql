@@ -138,6 +138,53 @@ comment on column bali.accommodations.details is
 -- Existing table grants (anon SELECT, service_role ALL) and the realtime
 -- publication automatically cover these new columns — no extra policy needed.
 
+-- ── per-person prices: who gets the best deal & books ───────────────
+-- Each member records the real price THEY see for an accommodation (Genius
+-- level, loyalty, regional pricing, coupons…), layered on top of the parsed
+-- standard price_per_night. One row per (accommodation, member), upserted like
+-- votes and streamed live the same way. Amounts are per NIGHT.
+create table if not exists bali.accommodation_prices (
+  id                uuid        primary key default gen_random_uuid(),
+  accommodation_id  uuid        not null references bali.accommodations(id) on delete cascade,
+  member_id         uuid        not null references bali.members(id) on delete cascade,
+  amount            numeric     not null check (amount > 0), -- per night; 0 = unset, rejected
+  currency          text,
+  note              text,
+  updated_at        timestamptz not null default now(),
+  unique (accommodation_id, member_id)
+);
+
+create index if not exists accommodation_prices_accommodation_id_idx
+  on bali.accommodation_prices (accommodation_id);
+
+-- Open SELECT for the Data API roles (gate cookie is the real boundary, no write
+-- policy → anon can only read); service_role needs its OWN grant because the
+-- earlier `grant all on all tables` only covered tables that existed back then.
+alter table bali.accommodation_prices enable row level security;
+do $$ begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'bali' and tablename = 'accommodation_prices'
+      and policyname = 'accommodation_prices_read'
+  ) then
+    create policy "accommodation_prices_read" on bali.accommodation_prices
+      for select to anon, authenticated using (true);
+  end if;
+end $$;
+grant select on bali.accommodation_prices to anon, authenticated;
+grant all    on bali.accommodation_prices to service_role;
+
+-- Stream price changes to the browser anon client. Guarded so it's re-runnable.
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'bali' and tablename = 'accommodation_prices'
+  ) then
+    alter publication supabase_realtime add table bali.accommodation_prices;
+  end if;
+end $$;
+
 -- ── seed: trip legs + sample members (edit for your real itinerary) ─
 -- Seed data for local development / `supabase db reset`.
 --
