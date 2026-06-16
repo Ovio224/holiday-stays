@@ -1,36 +1,109 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bali Stays 🌴
 
-## Getting Started
+A mobile-first, **realtime** web app for a friend group to compare accommodation
+(Airbnb / Booking.com links) for a multi-leg trip and vote 👍 / 👎 together. The
+whole app is locked behind **one shared code**; after entering it you pick your
+name, and every vote and submission is attributed to you.
 
-First, run the development server:
+Built for our Bali trip, but the structure (trip → legs → candidate places) works
+for any multi-stop trip.
+
+## Features
+
+- 🔒 **One shared gate code** (no per-user accounts) with brute-force lockout.
+- 🙋 **Pick-your-name** identity — see who added what and who voted which way.
+- 🗺️ **Legs** (e.g. Ubud → Canggu → Uluwatu), each with its own candidate list.
+- ⚡ **Realtime** — new places and votes appear instantly on everyone's screen.
+- 🔎 **Best-effort link parsing** — we try to grab the title/photo/price from the
+  link; you can always fill them in by hand.
+- 📱 **Mobile-first** — designed for phones, with a bottom-sheet "add a place"
+  form and big thumb-friendly vote buttons.
+
+## Tech stack
+
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind v4 · shadcn/ui ·
+Supabase (Postgres + Realtime, **no** Supabase Auth) · `jose` (signed gate
+cookie) · Vitest · deployed on Vercel.
+
+**Architecture:** Server Components read; Server Actions write (using the
+service-role key, which never reaches the browser). The browser holds only the
+anon key for a **SELECT-only** Realtime subscription. A signed gate cookie guards
+routes in `src/proxy.ts`, and — because that is only an optimistic check — every
+mutating action re-verifies it with `assertGate()`.
+
+## Prerequisites
+
+- **Node 22** (`.nvmrc` pins `22.13.1`; run `nvm use`)
+- **Docker** (for the local Supabase stack)
+
+## Local development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+nvm use                 # Node 22
+npm install
+
+# 1. Start the local Supabase stack (Postgres + Realtime + Studio) via Docker
+npm run db:start        # first run pulls images; prints local keys
+
+# 2. Create .env.local from the example, then paste the keys printed above
+cp .env.example .env.local
+#    - NEXT_PUBLIC_SUPABASE_URL        -> "API URL"
+#    - NEXT_PUBLIC_SUPABASE_ANON_KEY   -> "anon key"
+#    - SUPABASE_SERVICE_ROLE_KEY       -> "service_role key"
+#    - GATE_CODE                       -> whatever code you want to share
+#    (run `npx supabase status` anytime to re-print the keys)
+
+# 3. Apply the schema + seed (3 legs + 2 sample members)
+npm run db:reset
+
+# 4. Run the app
+npm run dev             # http://localhost:3100
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open the app, enter your `GATE_CODE`, pick a name, and start dropping links.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | Dev server on port 3100 |
+| `npm run build` / `npm start` | Production build / serve |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Unit tests (parser, gate token, rate-limit) |
+| `npm run db:start` / `db:stop` | Start / stop local Supabase |
+| `npm run db:reset` | Recreate the local DB from migrations + seed |
 
-## Learn More
+## Database
 
-To learn more about Next.js, take a look at the following resources:
+Schema lives in `supabase/migrations/` (tables, RLS, grants, indexes, and the
+Realtime publication) and sample data in `supabase/seed.sql`. Edit
+`supabase/seed.sql` to set your real trip legs, then `npm run db:reset`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Security model: RLS is on for every table. The four content tables
+(`members`, `stays`, `accommodations`, `votes`) allow **anon SELECT** (so the
+shared board streams over Realtime) and **no** anon writes. `gate_attempts` is
+server-only. The gate cookie is the real access boundary.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deploying
 
-## Deploy on Vercel
+1. **Supabase (cloud):** create a project, then
+   `npx supabase link --project-ref <ref>` and `npx supabase db push` to apply
+   the migrations. Run the seed once if you want sample data.
+2. **Vercel:** import the repo and set the env vars from `.env.example`
+   (`GATE_CODE`, `SESSION_SECRET`, and the three `*_SUPABASE_*` values from your
+   cloud project). Deploy.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Cookies are marked `secure` automatically in production (`NODE_ENV=production`).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Notes
+
+- **Parsing is best-effort.** Airbnb and Booking.com often block server-side
+  fetches or omit OpenGraph data, in which case the card falls back to the raw
+  link and you can type the title/price yourself. This is expected.
+- Voting is a toggle: tap 👍 or 👎 to vote, tap the same side again to clear your
+  vote, or tap the other side to switch.
+
+---
+
+Design docs: [`docs/superpowers/specs/`](docs/superpowers/specs/) ·
+plan: [`docs/superpowers/plans/`](docs/superpowers/plans/).

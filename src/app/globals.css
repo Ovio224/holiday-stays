@@ -1,26 +1,218 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
+/*
+  PARADISE THEME — a lush, airy tropical palette for the Bali stay-vote app.
+  Light-first (the app never auto-switches to dark; .dark exists only if opted in).
+  Colors are in oklch for vivid, even tropical hues.
+*/
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-display);
+
+  /* shadcn semantic tokens */
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* paradise accent palette (use as bg-lagoon, text-sunset, etc.) */
+  --color-lagoon: var(--lagoon);
+  --color-ocean: var(--ocean);
+  --color-palm: var(--palm);
+  --color-sunset: var(--sunset);
+  --color-hibiscus: var(--hibiscus);
+  --color-mango: var(--mango);
+  --color-sand: var(--sand);
+  --color-foam: var(--foam);
+  --color-yes: var(--yes);
+  --color-no: var(--no);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.4);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  --radius: 1.1rem;
+
+  --foam: oklch(0.985 0.012 200);
+  --background: oklch(0.985 0.012 200);
+  --foreground: oklch(0.31 0.045 224);
+
+  --card: oklch(0.997 0.006 200);
+  --card-foreground: oklch(0.31 0.045 224);
+  --popover: oklch(0.998 0.005 200);
+  --popover-foreground: oklch(0.31 0.045 224);
+
+  --primary: oklch(0.64 0.115 207);
+  --primary-foreground: oklch(0.99 0.01 200);
+
+  --secondary: oklch(0.94 0.04 90);
+  --secondary-foreground: oklch(0.36 0.05 70);
+
+  --muted: oklch(0.95 0.02 200);
+  --muted-foreground: oklch(0.53 0.035 222);
+
+  --accent: oklch(0.92 0.05 195);
+  --accent-foreground: oklch(0.34 0.05 216);
+
+  --destructive: oklch(0.62 0.2 22);
+
+  --border: oklch(0.9 0.022 205);
+  --input: oklch(0.9 0.022 205);
+  --ring: oklch(0.64 0.115 207);
+
+  /* paradise palette */
+  --lagoon: oklch(0.8 0.12 190);
+  --ocean: oklch(0.55 0.1 236);
+  --palm: oklch(0.62 0.13 155);
+  --sunset: oklch(0.72 0.16 46);
+  --hibiscus: oklch(0.66 0.2 8);
+  --mango: oklch(0.83 0.15 80);
+  --sand: oklch(0.93 0.045 88);
+  --yes: oklch(0.62 0.13 155);
+  --no: oklch(0.64 0.16 26);
+
+  /* gradients */
+  --grad-sea: linear-gradient(135deg, var(--lagoon), var(--ocean));
+  --grad-sunset: linear-gradient(120deg, var(--mango), var(--sunset) 55%, var(--hibiscus));
+  --grad-paradise: linear-gradient(
+    160deg,
+    oklch(0.93 0.06 210) 0%,
+    oklch(0.95 0.05 195) 35%,
+    oklch(0.96 0.05 150) 70%,
+    oklch(0.97 0.05 90) 100%
+  );
+
+  --chart-1: var(--lagoon);
+  --chart-2: var(--palm);
+  --chart-3: var(--sunset);
+  --chart-4: var(--ocean);
+  --chart-5: var(--hibiscus);
+
+  --sidebar: oklch(0.99 0.01 200);
+  --sidebar-foreground: oklch(0.31 0.045 224);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+
+.dark {
+  --foam: oklch(0.22 0.03 232);
+  --background: oklch(0.2 0.03 235);
+  --foreground: oklch(0.95 0.02 200);
+  --card: oklch(0.26 0.035 232);
+  --card-foreground: oklch(0.95 0.02 200);
+  --popover: oklch(0.26 0.035 232);
+  --popover-foreground: oklch(0.95 0.02 200);
+  --primary: oklch(0.74 0.12 196);
+  --primary-foreground: oklch(0.2 0.03 235);
+  --secondary: oklch(0.34 0.04 230);
+  --secondary-foreground: oklch(0.95 0.02 200);
+  --muted: oklch(0.32 0.03 232);
+  --muted-foreground: oklch(0.74 0.03 210);
+  --accent: oklch(0.36 0.05 215);
+  --accent-foreground: oklch(0.96 0.02 200);
+  --destructive: oklch(0.66 0.19 22);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.74 0.12 196);
+  --grad-paradise: linear-gradient(160deg, oklch(0.28 0.05 240), oklch(0.24 0.04 200) 60%, oklch(0.26 0.05 160));
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  }
+  html {
+    @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display), var(--font-sans), ui-sans-serif, sans-serif;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* Frosted glass surface — the signature paradise card material */
+  .glass {
+    background: color-mix(in oklab, var(--card) 78%, transparent);
+    backdrop-filter: blur(14px) saturate(1.3);
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    border: 1px solid color-mix(in oklab, white 55%, transparent);
+    box-shadow:
+      0 1px 0 0 color-mix(in oklab, white 60%, transparent) inset,
+      0 18px 40px -24px color-mix(in oklab, var(--ocean) 50%, transparent);
+  }
+  .glass-strong {
+    background: color-mix(in oklab, var(--card) 90%, transparent);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid color-mix(in oklab, white 60%, transparent);
+  }
+  .bg-grad-sea { background-image: var(--grad-sea); }
+  .bg-grad-sunset { background-image: var(--grad-sunset); }
+  .bg-grad-paradise { background-image: var(--grad-paradise); }
+  .text-gradient-sunset {
+    background-image: var(--grad-sunset);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .text-gradient-sea {
+    background-image: var(--grad-sea);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@keyframes paradise-float {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(0, -22px, 0) scale(1.04); }
+}
+@keyframes paradise-drift {
+  0% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(24px, -12px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+@keyframes pop-in {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-pop-in { animation: pop-in 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pop-in,
+  [class*="paradise-"] { animation: none !important; }
 }

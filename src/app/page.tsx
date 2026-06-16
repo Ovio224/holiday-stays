@@ -1,65 +1,62 @@
-import Image from "next/image";
+// The board — home of the app. Server component: loads the current member and
+// the full board snapshot, gates on identity, then hands everything to the live
+// <TripBoard />. Always dynamic so each visitor sees fresh, per-request data.
 
-export default function Home() {
+import { redirect } from "next/navigation";
+
+import { getCurrentMemberId } from "@/lib/identity";
+import { getBoardData } from "@/lib/data";
+import { formatDateRange } from "@/lib/format";
+import { TripBoard } from "@/components/trip-board";
+
+// Per-request data (cookies + live board) — never statically cached.
+export const dynamic = "force-dynamic";
+
+export default async function BoardPage() {
+  const memberId = await getCurrentMemberId();
+  const { stays, accommodations, members } = await getBoardData();
+
+  // No identity (or a stale cookie pointing at a deleted member) → choose a name.
+  if (!memberId || !members.some((m) => m.id === memberId)) {
+    redirect("/name");
+  }
+
+  // A friendly trip-dates summary spanning the first → last stay, when known.
+  const tripRange = computeTripRange(stays);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <main className="flex min-h-dvh flex-col pt-12 pb-6 sm:pt-16">
+      {/* The header (with its live friends/places counts) lives inside TripBoard
+          so the counts track realtime additions, not just the initial render. */}
+      <TripBoard
+        initialStays={stays}
+        initialAccommodations={accommodations}
+        members={members}
+        currentMemberId={memberId}
+        tripRange={tripRange}
+      />
+    </main>
   );
+}
+
+/**
+ * Build a single date range covering the whole trip: earliest start_date to
+ * latest end_date across all stays. Returns "" when no dated stays exist.
+ */
+function computeTripRange(
+  stays: { start_date: string | null; end_date: string | null }[],
+): string {
+  let earliest: string | null = null;
+  let latest: string | null = null;
+
+  for (const stay of stays) {
+    if (stay.start_date && (!earliest || stay.start_date < earliest)) {
+      earliest = stay.start_date;
+    }
+    if (stay.end_date && (!latest || stay.end_date > latest)) {
+      latest = stay.end_date;
+    }
+  }
+
+  return formatDateRange(earliest, latest);
 }
