@@ -20,6 +20,7 @@ import type {
   AccommodationPrice,
   AccommodationWithVotes,
   Member,
+  Place,
   Stay,
   Vote,
 } from "@/lib/types";
@@ -42,12 +43,14 @@ interface UseRealtimeBoardArgs {
   initialStays: Stay[];
   initialAccommodations: AccommodationWithVotes[];
   initialMembers: Member[];
+  initialPlaces: Place[];
 }
 
 interface UseRealtimeBoardResult {
   stays: Stay[];
   accommodations: AccommodationWithVotes[];
   members: Member[];
+  places: Place[];
   /**
    * Imperatively merge a stay the caller just wrote (the return value of a
    * create/update server action) into local state, without waiting for the
@@ -58,6 +61,10 @@ interface UseRealtimeBoardResult {
   applyStayUpsert: (stay: Stay) => void;
   /** Imperatively drop a stay the caller just deleted (same rationale). */
   applyStayRemoval: (stayId: string) => void;
+  /** Imperatively merge a place the caller just wrote (same rationale as stays). */
+  applyPlaceUpsert: (place: Place) => void;
+  /** Imperatively drop a place the caller just deleted. */
+  applyPlaceRemoval: (placeId: string) => void;
 }
 
 /** Upsert a stay row by id (replace-or-insert), tolerant of out-of-order events. */
@@ -71,6 +78,17 @@ function upsertStay(list: Stay[], row: Stay): Stay[] {
 /** Remove a stay (by id). */
 function removeStay(list: Stay[], stayId: string): Stay[] {
   return list.filter((s) => s.id !== stayId);
+}
+
+/** Upsert a place row by id (replace-or-insert), tolerant of out-of-order events. */
+function upsertPlace(list: Place[], row: Place): Place[] {
+  const existing = list.some((p) => p.id === row.id);
+  return existing ? list.map((p) => (p.id === row.id ? row : p)) : [...list, row];
+}
+
+/** Remove a place (by id). */
+function removePlace(list: Place[], placeId: string): Place[] {
+  return list.filter((p) => p.id !== placeId);
 }
 
 /**
@@ -177,11 +195,13 @@ export function useRealtimeBoard({
   initialStays,
   initialAccommodations,
   initialMembers,
+  initialPlaces,
 }: UseRealtimeBoardArgs): UseRealtimeBoardResult {
   const [stays, setStays] = useState<Stay[]>(initialStays);
   const [accommodations, setAccommodations] =
     useState<AccommodationWithVotes[]>(initialAccommodations);
   const [members, setMembers] = useState<Member[]>(initialMembers);
+  const [places, setPlaces] = useState<Place[]>(initialPlaces);
 
   // Imperative, locally-applied mutations for the acting user. They run through
   // the very same reducers the realtime handlers use, so applying a freshly
@@ -193,6 +213,14 @@ export function useRealtimeBoard({
   );
   const applyStayRemoval = useCallback(
     (stayId: string) => setStays((prev) => removeStay(prev, stayId)),
+    [],
+  );
+  const applyPlaceUpsert = useCallback(
+    (place: Place) => setPlaces((prev) => upsertPlace(prev, place)),
+    [],
+  );
+  const applyPlaceRemoval = useCallback(
+    (placeId: string) => setPlaces((prev) => removePlace(prev, placeId)),
     [],
   );
 
@@ -289,6 +317,22 @@ export function useRealtimeBoard({
           setAccommodations((prev) => upsertComment(prev, comment));
         },
       )
+      // --- places (per-leg points of interest) ----------------------------
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "bali", table: "places" },
+        (payload: ChangePayload) => {
+          if (payload.eventType === "DELETE") {
+            const oldId = (payload.old as Partial<Place>).id;
+            if (!oldId) return;
+            setPlaces((prev) => removePlace(prev, oldId));
+            return;
+          }
+          const row = payload.new as unknown as Place;
+          if (!row?.id) return;
+          setPlaces((prev) => upsertPlace(prev, row));
+        },
+      )
       // --- members --------------------------------------------------------
       .on(
         "postgres_changes",
@@ -311,5 +355,14 @@ export function useRealtimeBoard({
     };
   }, []);
 
-  return { stays, accommodations, members, applyStayUpsert, applyStayRemoval };
+  return {
+    stays,
+    accommodations,
+    members,
+    places,
+    applyStayUpsert,
+    applyStayRemoval,
+    applyPlaceUpsert,
+    applyPlaceRemoval,
+  };
 }

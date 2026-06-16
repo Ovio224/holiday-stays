@@ -1,6 +1,7 @@
 // Server-side read helpers. These use the service-role client (bypasses RLS) so
 // they MUST only run on the server — never import this from a client component.
 
+import { env } from "@/lib/env";
 import { getServiceClient } from "@/lib/supabase/server";
 import type {
   Stay,
@@ -8,6 +9,7 @@ import type {
   Accommodation,
   AccommodationComment,
   AccommodationPrice,
+  Place,
   Vote,
   AccommodationWithVotes,
 } from "@/lib/types";
@@ -60,14 +62,30 @@ export async function getBoardData(): Promise<{
   stays: Stay[];
   accommodations: AccommodationWithVotes[];
   members: Member[];
+  places: Place[];
 }> {
   const supabase = getServiceClient();
 
-  // Comments are loaded as a SEPARATE query (not a PostgREST embed) so the board
-  // never hard-fails if the bali.accommodation_comments table hasn't been applied
-  // to this database yet — a missing relation just degrades to an empty thread.
-  // (Embeds fail the whole accommodations query; a standalone error doesn't.)
-  const [staysResult, accommodationsResult, membersResult, commentsResult] =
+  // Location-aware scoring is gated: with the flag OFF we skip the `places` query
+  // entirely (return []), so an un-migrated cloud DB is provably untouched and the
+  // board behaves exactly as before.
+  const locationScoring = env.locationScoringEnabled();
+
+  // Comments AND places are loaded as SEPARATE queries (not PostgREST embeds) so
+  // the board never hard-fails if their tables haven't been applied to this
+  // database yet — a missing relation just degrades (empty thread / no places /
+  // haversine-only scoring). Embeds fail the whole accommodations query; a
+  // standalone error doesn't. `places`/`distances` MUST follow this pattern —
+  // never add a new embed onto the accommodations select.
+  const placesQuery = locationScoring
+    ? supabase
+        .from("places")
+        .select("*")
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true })
+    : Promise.resolve({ data: [] as Place[], error: null as { message: string } | null });
+
+  const [staysResult, accommodationsResult, membersResult, commentsResult, placesResult] =
     await Promise.all([
       supabase
         .from("stays")
@@ -86,6 +104,7 @@ export async function getBoardData(): Promise<{
         .from("accommodation_comments")
         .select("*")
         .order("created_at", { ascending: true }),
+      placesQuery,
     ]);
 
   if (staysResult.error) {
@@ -128,5 +147,15 @@ export async function getBoardData(): Promise<{
     comments: commentsByAccommodation.get(row.id) ?? [],
   }));
 
-  return { stays, accommodations, members };
+  // Places: a NEW top-level array (not nested onto accommodations — they're
+  // per-stay, joined in the UI by stay_id). A query error (table not applied yet)
+  // is non-fatal: log once and fall back to no places.
+  if (placesResult.error) {
+    console.warn(
+      `Places unavailable (continuing without them): ${placesResult.error.message}`,
+    );
+  }
+  const places = (placesResult.data ?? []) as Place[];
+
+  return { stays, accommodations, members, places };
 }

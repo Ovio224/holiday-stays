@@ -13,11 +13,15 @@ import {
   prepareAccommodationEdit,
   type AccommodationEditInput,
 } from "@/lib/accommodations";
+import { env } from "@/lib/env";
+import { geocodeToColumns } from "@/lib/geocode";
 import { detectSource } from "@/lib/parsing/source";
 import { fetchAndParse } from "@/lib/parsing/fetch-listing";
+import { parseCoordinates } from "@/lib/places";
 import { getServiceClient } from "@/lib/supabase/server";
 import type {
   Accommodation,
+  GeocodeStatus,
   ListingDetails,
   ParsedListing,
   ParseStatus,
@@ -140,12 +144,20 @@ export async function updateAccommodation(
   const normalized = prepareAccommodationEdit(rest);
 
   const supabase = getServiceClient();
+  const locationScoring = env.locationScoringEnabled();
 
   // Fetch the current details so we can overlay only the edited capacity keys,
-  // leaving parsed rating/reviews (and any unedited capacity field) intact.
+  // leaving parsed rating/reviews (and any unedited capacity field) intact. When
+  // location scoring is on we also read the geocode state so we only re-resolve
+  // coordinates when the address actually changes. (Off → don't touch/read the new
+  // columns at all, so an un-migrated DB is untouched.)
   const { data: existing, error: fetchError } = await supabase
     .from("accommodations")
-    .select("details")
+    .select(
+      locationScoring
+        ? "details, address, latitude, longitude, geocode_status"
+        : "details",
+    )
     .eq("id", id)
     .single();
 
@@ -155,7 +167,14 @@ export async function updateAccommodation(
     );
   }
 
-  const currentDetails = (existing.details ?? {}) as Partial<ListingDetails>;
+  const ex = existing as {
+    details?: Partial<ListingDetails> | null;
+    address?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    geocode_status?: GeocodeStatus;
+  };
+  const currentDetails = (ex.details ?? {}) as Partial<ListingDetails>;
   const mergedDetails = { ...currentDetails, ...normalized.details };
 
   const update: Record<string, unknown> = {
@@ -171,6 +190,32 @@ export async function updateAccommodation(
   // A manually supplied title means the user curated this card themselves.
   if (normalized.title) {
     update.parse_status = "manual" satisfies ParseStatus;
+  }
+
+  // Location-aware scoring: turn the address into an origin coordinate so the
+  // scorer can measure distance to the leg's POIs. Re-resolve only when the
+  // address actually changes. The Address field doubles as the manual-coordinate
+  // escape hatch — pasting "lat,lng" or a Google Maps link sets a manual pin
+  // (works keyless); a real address is geocoded (needs LOCATIONIQ_API_KEY, else
+  // stays 'pending'). A manual pin is never wiped by an address-text edit.
+  if (locationScoring && normalized.address !== (ex.address ?? null)) {
+    const prevStatus = ex.geocode_status ?? "pending";
+    const coords = parseCoordinates(normalized.address);
+    if (coords) {
+      update.latitude = coords.latitude;
+      update.longitude = coords.longitude;
+      update.geocode_status = "manual";
+      update.geocoded_at = new Date().toISOString();
+    } else if (!normalized.address) {
+      if (prevStatus !== "manual") {
+        update.latitude = null;
+        update.longitude = null;
+        update.geocode_status = "pending";
+        update.geocoded_at = null;
+      }
+    } else if (prevStatus !== "manual") {
+      Object.assign(update, await geocodeToColumns(normalized.address));
+    }
   }
 
   const { data, error } = await supabase

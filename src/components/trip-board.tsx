@@ -8,7 +8,7 @@ import * as React from "react";
 import { CalendarDays, Plus, PlusIcon, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
-import type { Stay, AccommodationWithVotes, Member } from "@/lib/types";
+import type { Stay, AccommodationWithVotes, Member, Place } from "@/lib/types";
 import { formatMoney, nights, tripBudget, tripDateRange } from "@/lib/format";
 import { reorderStay } from "@/actions/stays";
 import { useRealtimeBoard } from "@/hooks/use-realtime-board";
@@ -20,6 +20,9 @@ interface TripBoardProps {
   initialStays: Stay[];
   initialAccommodations: AccommodationWithVotes[];
   members: Member[];
+  initialPlaces: Place[];
+  /** Master flag — when off the board renders exactly as before (no places UI). */
+  locationScoringEnabled: boolean;
   currentMemberId: string | null;
 }
 
@@ -27,20 +30,27 @@ export function TripBoard({
   initialStays,
   initialAccommodations,
   members,
+  initialPlaces,
+  locationScoringEnabled,
   currentMemberId,
 }: TripBoardProps) {
-  // Everything live: stays, accommodations, and members all stream in via the
-  // realtime subscription, so the board, banner, and budget recompute together.
+  // Everything live: stays, accommodations, members, and places all stream in via
+  // the realtime subscription, so the board, banner, budget, and location scores
+  // recompute together.
   const {
     stays,
     accommodations,
     members: liveMembers,
+    places,
     applyStayUpsert,
     applyStayRemoval,
+    applyPlaceUpsert,
+    applyPlaceRemoval,
   } = useRealtimeBoard({
     initialStays,
     initialAccommodations,
     initialMembers: members,
+    initialPlaces,
   });
 
   // Live counts for the header so they update with realtime additions.
@@ -147,6 +157,22 @@ export function TripBoard({
     return map;
   }, [accommodations]);
 
+  // Bucket places by stay_id, sorted for display (sort_order, then created_at).
+  const placesByStay = React.useMemo(() => {
+    const map = new Map<string, Place[]>();
+    for (const p of places) {
+      const bucket = map.get(p.stay_id);
+      if (bucket) bucket.push(p);
+      else map.set(p.stay_id, [p]);
+    }
+    for (const bucket of map.values()) {
+      bucket.sort(
+        (a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at),
+      );
+    }
+    return map;
+  }, [places]);
+
   // Whole-trip budget estimate from the priced candidates in each leg.
   const budget = React.useMemo(
     () =>
@@ -226,12 +252,16 @@ export function TripBoard({
             key={stay.id}
             stay={stay}
             accommodations={byStay.get(stay.id) ?? []}
+            places={placesByStay.get(stay.id) ?? []}
             members={liveMembers}
             currentMemberId={currentMemberId}
+            locationScoringEnabled={locationScoringEnabled}
             onAdd={openSubmitFor}
             onEdit={openEditLeg}
             onMoveUp={(id) => moveLeg(id, "up")}
             onMoveDown={(id) => moveLeg(id, "down")}
+            onPlaceSaved={applyPlaceUpsert}
+            onPlaceRemoved={applyPlaceRemoval}
             isFirst={index === 0}
             isLast={index === sortedStays.length - 1}
           />

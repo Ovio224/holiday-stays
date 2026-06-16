@@ -251,6 +251,71 @@ do $$ begin
   end if;
 end $$;
 
+-- ── places to visit + accommodation coordinates: location-aware scoring ──
+-- Per-leg points of interest (POIs) the group wants to be near, plus geocoded
+-- coordinates on accommodations, so the board can rank each candidate by how close
+-- it sits to those POIs. Idempotent idiom (create table if not exists + guarded
+-- policy/publication), mirroring the versioned migrations 20260617090000_places.sql
+-- and 20260617090500_accommodation_coords.sql. `latitude`/`longitude` are null
+-- until geocoded (LocationIQ, or a manual coordinate entry); the feature degrades
+-- to a keyless haversine estimate and "Needs address" chips when nothing is set.
+create table if not exists bali.places (
+  id               uuid        primary key default gen_random_uuid(),
+  stay_id          uuid        not null references bali.stays(id) on delete cascade,
+  label            text        not null,
+  category         text,
+  address          text,
+  latitude         double precision,
+  longitude        double precision,
+  geocode_status   text        not null default 'pending'
+                     check (geocode_status in ('pending', 'ok', 'failed', 'manual')),
+  geocoded_at      timestamptz,
+  importance       smallint    not null default 2  -- 3 = must, 2 = want, 1 = nice
+                     check (importance between 1 and 3),
+  closer_is_better boolean     not null default true,
+  sort_order       integer     not null default 0,
+  submitted_by     uuid        references bali.members(id) on delete set null,
+  created_at       timestamptz not null default now()
+);
+
+create index if not exists places_stay_id_idx on bali.places (stay_id);
+
+-- Open SELECT for the Data API roles; service_role needs its OWN grant because
+-- the init `grant all on all tables` only covered the tables that existed then.
+alter table bali.places enable row level security;
+do $$ begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'bali' and tablename = 'places' and policyname = 'places_read'
+  ) then
+    create policy "places_read" on bali.places
+      for select to anon, authenticated using (true);
+  end if;
+end $$;
+grant select on bali.places to anon, authenticated;
+grant all    on bali.places to service_role;
+
+-- Stream live POI changes to the browser anon client. Guarded so it's re-runnable.
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'bali' and tablename = 'places'
+  ) then
+    alter publication supabase_realtime add table bali.places;
+  end if;
+end $$;
+
+-- Geocoded coordinates on accommodations (nullable; null until geocoded). The
+-- existing table grants + realtime publication cover these new columns; no extra
+-- policy is needed (we're adding columns, not a relation).
+alter table bali.accommodations
+  add column if not exists latitude       double precision,
+  add column if not exists longitude      double precision,
+  add column if not exists geocode_status text not null default 'pending'
+    check (geocode_status in ('pending', 'ok', 'failed', 'manual')),
+  add column if not exists geocoded_at    timestamptz;
+
 -- ── seed: trip legs + sample members (edit for your real itinerary) ─
 -- Seed data for local development / `supabase db reset`.
 --

@@ -16,7 +16,7 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Expand, ExternalLink, ImageOff, MapPin, Pencil, Star, Trash2 } from "lucide-react";
+import { Bike, Expand, ExternalLink, ImageOff, MapPin, Pencil, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { deleteAccommodation, updateAccommodation } from "@/actions/accommodations";
@@ -34,7 +34,8 @@ import {
   nightlyTotal,
   sourceLabel,
 } from "@/lib/format";
-import type { AccommodationWithVotes, Member } from "@/lib/types";
+import { poiDistances, type ScoreResult } from "@/lib/location-score";
+import type { AccommodationWithVotes, Member, Place } from "@/lib/types";
 import {
   Dialog,
   DialogClose,
@@ -58,6 +59,9 @@ interface AccommodationDetailDialogProps {
   stayArea: string | null;
   stayLabel: string;
   stayNights: number | null;
+  places: Place[];
+  score: ScoreResult | null;
+  locationScoringEnabled: boolean;
 }
 
 export function AccommodationDetailDialog({
@@ -67,6 +71,9 @@ export function AccommodationDetailDialog({
   stayArea,
   stayLabel,
   stayNights,
+  places,
+  score,
+  locationScoringEnabled,
 }: AccommodationDetailDialogProps) {
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
@@ -130,6 +137,9 @@ export function AccommodationDetailDialog({
             stayArea={stayArea}
             stayLabel={stayLabel}
             stayNights={stayNights}
+            places={places}
+            score={score}
+            locationScoringEnabled={locationScoringEnabled}
             title={title}
             onEdit={() => setEditing(true)}
             onDelete={handleDelete}
@@ -149,6 +159,9 @@ function ReadView({
   stayArea,
   stayLabel,
   stayNights,
+  places,
+  score,
+  locationScoringEnabled,
   title,
   onEdit,
   onDelete,
@@ -160,6 +173,9 @@ function ReadView({
   stayArea: string | null;
   stayLabel: string;
   stayNights: number | null;
+  places: Place[];
+  score: ScoreResult | null;
+  locationScoringEnabled: boolean;
   title: string;
   onEdit: () => void;
   onDelete: () => void;
@@ -263,6 +279,11 @@ function ReadView({
           </div>
         )}
       </div>
+
+      {/* Distances to this leg's places-to-visit (location scoring only). */}
+      {locationScoringEnabled && places.length > 0 && (
+        <DistancesSection accommodation={accommodation} places={places} score={score} />
+      )}
 
       {/* Info */}
       <div className="flex flex-col gap-3 text-sm">
@@ -406,6 +427,82 @@ function ReadView({
         )}
       </DialogFooter>
     </>
+  );
+}
+
+/**
+ * The "Distances from here" section: per-POI scooter time + distance + a sub-score
+ * bar, plus the location-score summary. When the accommodation itself isn't
+ * geocoded, every row would be empty, so we show a single "add an address" prompt
+ * instead. (Phase 1 is scooter-only; the mode toggle arrives in Phase 2.)
+ */
+function DistancesSection({
+  accommodation,
+  places,
+  score,
+}: {
+  accommodation: AccommodationWithVotes;
+  places: Place[];
+  score: ScoreResult | null;
+}) {
+  const origin =
+    accommodation.latitude != null && accommodation.longitude != null
+      ? { latitude: accommodation.latitude, longitude: accommodation.longitude }
+      : null;
+  const rows = poiDistances(origin, places, "scooter");
+
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          Distances from here
+        </h3>
+        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+          <Bike className="size-3.5" aria-hidden />
+          Scooter
+        </span>
+      </div>
+
+      {!origin ? (
+        <p className="text-sm text-muted-foreground">
+          Add an address to this stay to see distances. (Edit → Address, or set
+          coordinates.)
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {rows.map(({ place, minutes, km, subScore }) => (
+            <li key={place.id} className="flex items-center gap-3 text-sm">
+              <span className="w-28 shrink-0 truncate font-medium text-foreground">
+                {place.label}
+              </span>
+              <span className="w-24 shrink-0 tabular-nums text-muted-foreground">
+                {minutes != null
+                  ? `${Math.round(minutes)} min${km != null ? ` · ${km.toFixed(1)} km` : ""}`
+                  : "—"}
+              </span>
+              <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                <span
+                  className="block h-full rounded-full bg-foreground"
+                  style={{ width: `${Math.round(subScore ?? 0)}%` }}
+                  aria-hidden
+                />
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {origin && score?.location != null && (
+        <p className="text-sm text-muted-foreground">
+          Location score:{" "}
+          <span className="font-semibold text-foreground">
+            {Math.round(score.location)}
+          </span>
+          {score.coverageCount &&
+            ` · coverage ${Math.round(score.coveragePct ?? 0)}% (${score.coverageCount.within} of ${score.coverageCount.of} ≤15 min)`}
+        </p>
+      )}
+    </section>
   );
 }
 
