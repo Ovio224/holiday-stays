@@ -109,7 +109,7 @@ export function useRealtimeBoard({
       // --- accommodations -------------------------------------------------
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "accommodations" },
+        { event: "*", schema: "bali", table: "accommodations" },
         (payload: ChangePayload) => {
           if (payload.eventType === "DELETE") {
             const oldId = (payload.old as Partial<Accommodation>).id;
@@ -126,7 +126,7 @@ export function useRealtimeBoard({
       // --- votes ----------------------------------------------------------
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "votes" },
+        { event: "*", schema: "bali", table: "votes" },
         (payload: ChangePayload) => {
           if (payload.eventType === "DELETE") {
             const oldId = (payload.old as Partial<Vote>).id;
@@ -142,7 +142,7 @@ export function useRealtimeBoard({
       // --- members --------------------------------------------------------
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "members" },
+        { event: "*", schema: "bali", table: "members" },
         (payload: ChangePayload) => {
           if (payload.eventType === "INSERT") {
             const member = payload.new as unknown as Member;

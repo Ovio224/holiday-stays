@@ -10,5 +10,8 @@ import { env } from "@/lib/env";
 export function getServiceClient() {
   return createClient(env.supabaseUrl(), env.supabaseServiceKey(), {
     auth: { persistSession: false, autoRefreshToken: false },
+    // This app lives in a dedicated `bali` schema so it can share a Supabase
+    // project without colliding with other apps' public tables.
+    db: { schema: "bali" },
   });
 }

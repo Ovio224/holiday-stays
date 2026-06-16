@@ -87,22 +87,25 @@ server-only. The gate cookie is the real access boundary.
 
 ## Deploying (Supabase cloud + Vercel)
 
-### 1. Supabase project
+### 1. Supabase schema
 
-1. Create a project at <https://supabase.com/dashboard> (free tier). Note the
-   **project ref** and the **database password** you set.
-2. Link this repo and push the schema (you're already logged into the CLI):
-   ```bash
-   npx supabase link --project-ref <your-ref>
-   npx supabase db push        # applies both migrations: tables, RLS, grants,
-                               # realtime publication, and the details columns
-   ```
-3. Seed your trip legs. `db push` does **not** run `seed.sql` (that's local-only).
-   Edit `supabase/seed.sql` with your real legs, then paste it into the project's
-   **SQL Editor** and run it — or add legs directly in the dashboard. The app
-   needs at least the `stays` rows to render.
-4. Grab the keys from **Project Settings → API**: the **Project URL**, the
-   **anon/public** key, and the **service_role** key.
+This app lives entirely in a dedicated **`bali` Postgres schema**, so it can
+share an **existing** Supabase project without touching any other app's tables.
+
+1. **Apply the schema.** In your project's **SQL Editor**, run the two files in
+   `supabase/migrations/` in order — they create the `bali` schema, its tables,
+   RLS, grants, and register the realtime tables. (On a fresh dedicated project
+   you can instead `npx supabase link --project-ref <ref> && npx supabase db push`.)
+2. **Expose the schema.** Settings → API → **Exposed schemas** → add `bali`
+   (next to `public`, `graphql_public`). Skipping this gives "Invalid schema:
+   bali" at runtime.
+3. **Seed your legs.** Edit `supabase/seed.sql` with your real itinerary and run
+   it in the SQL Editor — the app needs at least the `bali.stays` rows to render.
+4. Grab the keys from **Settings → API**: Project **URL**, **anon** key, and
+   **service_role** key.
+
+The app reads/writes `bali.*` automatically (the Supabase clients set
+`db: { schema: "bali" }`); no extra config beyond exposing the schema.
 
 ### 2. Vercel
 

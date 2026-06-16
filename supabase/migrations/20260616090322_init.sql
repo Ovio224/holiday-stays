@@ -1,21 +1,19 @@
--- Initial schema for the accommodation-comparison board.
+-- Initial schema for the accommodation-comparison ("Bali Stays") board.
 --
--- The app is a small, invite-only board shared by ONE friend group, gated by a
--- single shared code. There is NO Supabase Auth: the gate cookie issued by the
--- Next.js server is the real authorization boundary. The browser uses the anon
--- key purely for Realtime + reads; all writes go through the service role on the
--- server (which bypasses RLS). RLS is therefore configured to allow open reads
--- but deny all anon writes by default.
+-- Everything lives in a dedicated `bali` schema so this app can share an
+-- EXISTING Supabase project without ever colliding with other apps' public
+-- tables. There is NO Supabase Auth: the Next.js gate cookie is the real
+-- authorization boundary. The browser anon key is used only for Realtime +
+-- reads (RLS: open SELECT); all writes go through the service role on the server.
 
--- 1. Extensions -------------------------------------------------------------
--- pgcrypto provides gen_random_uuid() used as the default for every primary key.
+-- 1. Schema + extensions ----------------------------------------------------
+create schema if not exists bali;
 create extension if not exists pgcrypto;
 
 -- 2. Tables -----------------------------------------------------------------
 
--- People in the friend group. They are lightweight identities (no auth user),
--- chosen on the client after the gate is passed.
-create table public.members (
+-- People in the friend group (lightweight identities, chosen after the gate).
+create table bali.members (
   id         uuid        primary key default gen_random_uuid(),
   name       text        not null,
   color      text        not null default '#16a7b8',
@@ -23,7 +21,7 @@ create table public.members (
 );
 
 -- A leg of the trip ("stay") that accommodations are grouped under.
-create table public.stays (
+create table bali.stays (
   id         uuid        primary key default gen_random_uuid(),
   label      text        not null,
   area       text,
@@ -34,9 +32,9 @@ create table public.stays (
 );
 
 -- A candidate listing (Airbnb / Booking / other link) submitted under a stay.
-create table public.accommodations (
+create table bali.accommodations (
   id           uuid        primary key default gen_random_uuid(),
-  stay_id      uuid        not null references public.stays(id) on delete cascade,
+  stay_id      uuid        not null references bali.stays(id) on delete cascade,
   url          text        not null,
   source       text        not null default 'other'
                  check (source in ('airbnb', 'booking', 'other')),
@@ -44,7 +42,7 @@ create table public.accommodations (
   image_url    text,
   price_text   text,
   notes        text,
-  submitted_by uuid        references public.members(id) on delete set null,
+  submitted_by uuid        references bali.members(id) on delete set null,
   parse_status text        not null default 'pending'
                  check (parse_status in ('pending', 'ok', 'failed', 'manual')),
   parsed_at    timestamptz,
@@ -52,18 +50,17 @@ create table public.accommodations (
 );
 
 -- One yes/no vote per member per accommodation (value: true = yes, false = no).
-create table public.votes (
+create table bali.votes (
   id                uuid        primary key default gen_random_uuid(),
-  accommodation_id  uuid        not null references public.accommodations(id) on delete cascade,
-  member_id         uuid        not null references public.members(id) on delete cascade,
+  accommodation_id  uuid        not null references bali.accommodations(id) on delete cascade,
+  member_id         uuid        not null references bali.members(id) on delete cascade,
   value             boolean     not null,
   updated_at        timestamptz not null default now(),
   unique (accommodation_id, member_id)
 );
 
--- Audit/rate-limit log for gate-code attempts. Only the service role ever reads
--- or writes this table (used to enforce gateMaxAttempts within gateWindowMinutes).
-create table public.gate_attempts (
+-- Audit/rate-limit log for gate-code attempts. Service role only.
+create table bali.gate_attempts (
   id           uuid        primary key default gen_random_uuid(),
   ip_hash      text        not null,
   success      boolean     not null,
@@ -71,76 +68,48 @@ create table public.gate_attempts (
 );
 
 -- 3. Indexes ----------------------------------------------------------------
--- Speed up the common board query (accommodations grouped by stay) and the
--- per-accommodation vote lookups, plus the gate rate-limit window scan.
-create index accommodations_stay_id_idx on public.accommodations (stay_id);
-create index votes_accommodation_id_idx on public.votes (accommodation_id);
+create index accommodations_stay_id_idx on bali.accommodations (stay_id);
+create index votes_accommodation_id_idx on bali.votes (accommodation_id);
 create index gate_attempts_ip_hash_attempted_at_idx
-  on public.gate_attempts (ip_hash, attempted_at);
+  on bali.gate_attempts (ip_hash, attempted_at);
 
 -- 4. Row Level Security -----------------------------------------------------
--- Enabled on every table. With RLS on and no permissive write policy, anon and
--- authenticated roles cannot insert/update/delete — only the service role can.
-alter table public.members        enable row level security;
-alter table public.stays          enable row level security;
-alter table public.accommodations enable row level security;
-alter table public.votes          enable row level security;
-alter table public.gate_attempts  enable row level security;
+-- RLS on every table. With no permissive write policy, anon/authenticated can
+-- only SELECT the content tables; only the service role can mutate.
+alter table bali.members        enable row level security;
+alter table bali.stays          enable row level security;
+alter table bali.accommodations enable row level security;
+alter table bali.votes          enable row level security;
+alter table bali.gate_attempts  enable row level security;
 
 -- 5. Policies ---------------------------------------------------------------
--- This is a deliberately SHARED internal board. The gate cookie (enforced in the
--- Next.js layer) is the actual access boundary, not RLS. Once a visitor is past
--- the gate they may read everything, so we expose an open SELECT policy on the
--- four content tables for the Data API roles. We intentionally create NO
--- insert/update/delete policies: RLS denies writes by default, so the anon key
--- (used by the browser for Realtime/reads) can never mutate data. All writes are
--- performed server-side with the service role, which bypasses RLS entirely.
-
-create policy "members_read" on public.members
+-- Deliberately SHARED internal board: the gate cookie is the real access
+-- boundary, so the four content tables expose an open SELECT for the Data API
+-- roles. NO insert/update/delete policies exist, so the anon key can never
+-- mutate data — all writes are server-side with the service role.
+create policy "members_read" on bali.members
   for select to anon, authenticated using (true);
-comment on policy "members_read" on public.members is
-  'Intentional open read: the shared gate cookie is the real access boundary. No write policies exist, so only the service role can mutate this table.';
-
-create policy "stays_read" on public.stays
+create policy "stays_read" on bali.stays
   for select to anon, authenticated using (true);
-comment on policy "stays_read" on public.stays is
-  'Intentional open read: the shared gate cookie is the real access boundary. No write policies exist, so only the service role can mutate this table.';
-
-create policy "accommodations_read" on public.accommodations
+create policy "accommodations_read" on bali.accommodations
   for select to anon, authenticated using (true);
-comment on policy "accommodations_read" on public.accommodations is
-  'Intentional open read: the shared gate cookie is the real access boundary. No write policies exist, so only the service role can mutate this table.';
-
-create policy "votes_read" on public.votes
+create policy "votes_read" on bali.votes
   for select to anon, authenticated using (true);
-comment on policy "votes_read" on public.votes is
-  'Intentional open read: the shared gate cookie is the real access boundary. No write policies exist, so only the service role can mutate this table.';
+-- bali.gate_attempts intentionally has NO policies (service role only).
 
--- gate_attempts intentionally has NO policies of any kind. With RLS enabled and
--- no policy, anon/authenticated are denied all access; only the service role
--- (which bypasses RLS) touches it. It is also never exposed via the Data API
--- grants below.
-
--- 6. Grants for the Data API ------------------------------------------------
--- PostgREST checks both RLS and table privileges. Grant SELECT on the four
--- content tables to the Data API roles so the open-read policies take effect.
--- gate_attempts is deliberately NOT granted to anyone but the service role.
-grant select on public.members        to anon, authenticated;
-grant select on public.stays          to anon, authenticated;
-grant select on public.accommodations to anon, authenticated;
-grant select on public.votes          to anon, authenticated;
-
--- The Next.js server performs ALL writes (and the gate rate-limit read/write)
--- with the service role. It bypasses RLS, but Postgres still enforces table-level
--- privileges, so grant it full access on every table explicitly rather than
--- relying on Supabase's implicit default privileges (which are not guaranteed to
--- apply to migration-created tables across CLI/setups).
-grant all on all tables in schema public to service_role;
-grant usage on schema public to service_role;
+-- 6. Schema usage + grants --------------------------------------------------
+-- PostgREST checks both RLS and table privileges. Expose the `bali` schema and
+-- grant SELECT on the content tables to the Data API roles; gate_attempts is
+-- never granted to anon/authenticated. The server (service role) gets full
+-- access on the whole schema explicitly.
+grant usage on schema bali to anon, authenticated, service_role;
+grant select on bali.members, bali.stays, bali.accommodations, bali.votes
+  to anon, authenticated;
+grant all on all tables in schema bali to service_role;
+grant all on all sequences in schema bali to service_role;
 
 -- 7. Realtime ---------------------------------------------------------------
--- Add the live-collaboration tables to the supabase_realtime publication so the
--- browser anon client receives INSERT/UPDATE/DELETE change events. gate_attempts
--- is excluded — it is server-only and not part of the live board.
+-- Stream live changes on the board tables to the browser anon client. The
+-- client subscribes with schema "bali"; gate_attempts is excluded.
 alter publication supabase_realtime
-  add table public.accommodations, public.votes, public.members;
+  add table bali.accommodations, bali.votes, bali.members;
