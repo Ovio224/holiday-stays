@@ -1,33 +1,41 @@
 // AccommodationCard — a clean Airbnb-style listing card for one candidate stay.
-// Shows a 16:9 cover (with a neutral placeholder when imageless), a subtle
-// source badge, the title as an external link, an optional inline price + notes,
-// the submitter chip, and finally the vote pills + voter clusters.
+// Shows a 16:9 cover with a source badge and a rating pill, the parsed name,
+// capacity details (guests / bedrooms / beds / baths), a prominent price with a
+// per-leg budget total, optional notes, the submitter, then votes.
 //
-// This is a shared component: it renders fine on the server and embeds the
-// VoteButtons client island for interactivity.
+// Shared component: renders on the server, embeds the VoteButtons client island.
 
 import Image from "next/image";
 import Link from "next/link";
-import { ImageOff } from "lucide-react";
+import { ImageOff, Star } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { VoteButtons } from "@/components/vote-buttons";
 import { VoterChips } from "@/components/voter-chips";
-import { sourceLabel } from "@/lib/format";
+import {
+  detailChips,
+  formatMoney,
+  formatRating,
+  nightlyTotal,
+  sourceLabel,
+} from "@/lib/format";
 import type { AccommodationWithVotes, Member } from "@/lib/types";
 
 interface AccommodationCardProps {
   accommodation: AccommodationWithVotes;
   members: Member[];
   currentMemberId: string | null;
+  /** Nights for this leg — used to compute the budget total. */
+  stayNights: number | null;
 }
 
 export function AccommodationCard({
   accommodation,
   members,
   currentMemberId,
+  stayNights,
 }: AccommodationCardProps) {
-  const { votes } = accommodation;
+  const { votes, details } = accommodation;
 
   // Derive the live tallies + this member's current vote from the joined votes.
   let yesCount = 0;
@@ -40,15 +48,24 @@ export function AccommodationCard({
   }
 
   const submitter = accommodation.submitted_by
-    ? members.find((m) => m.id === accommodation.submitted_by) ?? null
+    ? (members.find((m) => m.id === accommodation.submitted_by) ?? null)
     : null;
 
   const title = accommodation.title?.trim() || "Untitled stay";
+  const rating = formatRating(details?.rating ?? null);
+  const reviews = details?.reviews ?? null;
+  const chips = detailChips(details);
+
+  // Price + per-leg budget total.
+  const nightly = formatMoney(accommodation.price_per_night, accommodation.currency);
+  const total = formatMoney(
+    nightlyTotal(accommodation.price_per_night, stayNights),
+    accommodation.currency,
+  );
 
   return (
     <article className="group/card flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-      {/* Cover — 16:9. Real image when we have one, otherwise a neutral
-          placeholder so empty cards still read as intentional. */}
+      {/* Cover — 16:9, with source badge (left) and rating pill (right). */}
       <div className="relative aspect-video w-full overflow-hidden">
         {accommodation.image_url ? (
           <Image
@@ -60,18 +77,23 @@ export function AccommodationCard({
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-muted">
-            <ImageOff
-              className="size-10 text-muted-foreground"
-              strokeWidth={1.5}
-              aria-hidden
-            />
+            <ImageOff className="size-10 text-muted-foreground" strokeWidth={1.5} aria-hidden />
           </div>
         )}
 
-        {/* Source badge floats over the image as a subtle white pill. */}
         <Badge className="absolute top-3 left-3 border border-border bg-white/90 text-foreground shadow-sm">
           {sourceLabel(accommodation.source)}
         </Badge>
+
+        {rating && (
+          <div className="absolute top-3 right-3 flex items-center gap-1 rounded-full border border-border bg-white/90 px-2 py-1 text-xs font-semibold text-foreground shadow-sm">
+            <Star className="size-3 fill-foreground text-foreground" aria-hidden />
+            {rating}
+            {reviews != null && (
+              <span className="font-normal text-muted-foreground">({reviews})</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Body */}
@@ -86,21 +108,36 @@ export function AccommodationCard({
           <span className="line-clamp-2">{title}</span>
         </Link>
 
-        {/* Price — shown inline in bold ink, Airbnb-style. */}
-        {accommodation.price_text && (
-          <p className="text-sm font-semibold text-foreground">
-            {accommodation.price_text}
+        {/* Capacity details parsed from the listing. */}
+        {chips.length > 0 && (
+          <p className="line-clamp-1 text-sm text-muted-foreground">
+            {chips.join(" · ")}
           </p>
+        )}
+
+        {/* Price + per-leg budget total. */}
+        {nightly ? (
+          <p className="flex flex-wrap items-baseline gap-x-1.5">
+            <span className="text-base font-semibold text-foreground">{nightly}</span>
+            <span className="text-sm text-muted-foreground">/ night</span>
+            {total && stayNights != null && (
+              <span className="text-sm text-muted-foreground">
+                · {total} for {stayNights} {stayNights === 1 ? "night" : "nights"}
+              </span>
+            )}
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">Add a price to track budget</p>
         )}
 
         {/* Optional notes from whoever added it. */}
         {accommodation.notes?.trim() && (
-          <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
+          <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
             {accommodation.notes}
           </p>
         )}
 
-        {/* "added by" chip, with the submitter's personal color as a dot. */}
+        {/* "Added by" chip, with the submitter's personal color as a dot. */}
         {submitter && (
           <div className="flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
             <span

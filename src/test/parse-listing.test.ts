@@ -8,18 +8,17 @@ const BOOKING_HTML = `
   <head>
     <meta charset="utf-8" />
     <title>The Lagoon Villa, Bali &#8212; Booking.com</title>
-    <meta property="og:title" content="The Lagoon Villa &amp; Spa, Bali" />
     <meta property="og:image" content="https://cf.bstatic.com/images/hotel/max1024x768/lagoon-villa.jpg" />
-    <meta property="og:description" content="A breezy 3-bed villa with a private pool, 5 min from the beach. Guest&#39;s favourite." />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "Hotel",
         "name": "The Lagoon Villa",
+        "description": "A breezy 3-bed villa with a private pool, 5 min from the beach.",
         "priceRange": "$$",
         "offers": {
           "@type": "Offer",
-          "price": "1.234.000",
+          "price": "1234000",
           "priceCurrency": "IDR"
         }
       }
@@ -32,23 +31,38 @@ const BOOKING_HTML = `
 </html>
 `;
 
-// A realistic Airbnb-style page: og: tags + an inline "$120 / night" price,
-// no JSON-LD offer block.
+// A realistic Airbnb-style page: VacationRental JSON-LD with name +
+// aggregateRating, an og:title carrying the "★ · N bedrooms · ..." summary, and
+// NO offers/price (the Airbnb reality — price is entered manually).
 const AIRBNB_HTML = `
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Cozy Treehouse Retreat - Houses for Rent in Asheville - Airbnb</title>
-    <meta name="og:title" content="Cozy Treehouse Retreat &amp; Hot Tub" />
-    <meta property="og:image" content="https://a0.muscache.com/im/pictures/treehouse.jpg?aki_policy=large" />
-    <meta property="og:description" content="Wake up in the canopy. Sleeps 4. &quot;Magical&quot; — past guests." />
+    <title>Villa in Ceningan Island - Airbnb</title>
+    <meta property="og:title" content="Villa in Ceningan Island · ★4.82 · 4 bedrooms · 5 beds · 4 private baths" />
+    <meta property="og:description" content="Cliffside Cloud · Ocean View Villa" />
+    <meta property="og:image" content="https://a0.muscache.com/im/pictures/ceningan.jpg?aki_policy=large" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VacationRental",
+        "name": "Cliffside Cloud · Ocean View Villa",
+        "description": "Wake up above the reef in a glass-walled villa.",
+        "image": ["https://a0.muscache.com/im/pictures/ceningan.jpg"],
+        "aggregateRating": {
+          "@type": "AggregateRating",
+          "ratingValue": 4.82,
+          "ratingCount": "103"
+        },
+        "containsPlace": {
+          "@type": "Accommodation",
+          "occupancy": { "@type": "QuantitativeValue", "maxValue": 8 }
+        }
+      }
+    </script>
   </head>
   <body>
-    <div data-testid="price">
-      <span>$120</span>
-      <span>per night</span>
-    </div>
-    <div>$1,440 total before taxes</div>
+    <div data-testid="price"><span>$120</span><span>per night</span></div>
   </body>
 </html>
 `;
@@ -57,8 +71,8 @@ describe("parseListing", () => {
   describe("Booking-like fixture", () => {
     const result = parseListing(BOOKING_HTML, "https://www.booking.com/hotel");
 
-    it("prefers og:title and decodes the &amp; entity", () => {
-      expect(result.title).toBe("The Lagoon Villa & Spa, Bali");
+    it("uses the JSON-LD name as the title", () => {
+      expect(result.title).toBe("The Lagoon Villa");
     });
 
     it("extracts og:image", () => {
@@ -67,91 +81,177 @@ describe("parseListing", () => {
       );
     });
 
-    it("extracts og:description and decodes the numeric &#39; entity", () => {
+    it("extracts the JSON-LD description", () => {
       expect(result.description).toBe(
-        "A breezy 3-bed villa with a private pool, 5 min from the beach. Guest's favourite.",
+        "A breezy 3-bed villa with a private pool, 5 min from the beach.",
       );
     });
 
-    it("reads price + currency from JSON-LD", () => {
-      // priceCurrency IDR + price 1.234.000.
-      expect(result.priceText).toBe("IDR 1.234.000");
+    it("reads price + currency from JSON-LD offers", () => {
+      expect(result.pricePerNight).toBe(1234000);
+      expect(result.currency).toBe("IDR");
+      expect(result.priceText).toBe("IDR 1234000");
     });
   });
 
   describe("Airbnb-like fixture", () => {
     const result = parseListing(AIRBNB_HTML, "https://www.airbnb.com/rooms/1");
 
-    it("uses the name='og:title' variant and decodes entities", () => {
-      expect(result.title).toBe("Cozy Treehouse Retreat & Hot Tub");
+    it("uses the JSON-LD name as the title (not the og:title summary)", () => {
+      expect(result.title).toBe("Cliffside Cloud · Ocean View Villa");
+    });
+
+    it("reads the rating from aggregateRating.ratingValue", () => {
+      expect(result.details.rating).toBe(4.82);
+    });
+
+    it("reads the review count from aggregateRating.ratingCount", () => {
+      expect(result.details.reviews).toBe(103);
+    });
+
+    it("parses bedrooms / beds / baths from the og:title summary", () => {
+      expect(result.details.bedrooms).toBe(4);
+      expect(result.details.beds).toBe(5);
+      expect(result.details.baths).toBe(4);
+    });
+
+    it("reads guests from containsPlace.occupancy.maxValue", () => {
+      expect(result.details.guests).toBe(8);
     });
 
     it("extracts og:image including its query string", () => {
       expect(result.imageUrl).toBe(
-        "https://a0.muscache.com/im/pictures/treehouse.jpg?aki_policy=large",
+        "https://a0.muscache.com/im/pictures/ceningan.jpg?aki_policy=large",
       );
     });
 
-    it("extracts og:description and decodes &quot; entities", () => {
-      expect(result.description).toBe(
-        'Wake up in the canopy. Sleeps 4. "Magical" — past guests.',
-      );
+    it("leaves price null when Airbnb has no JSON-LD offers", () => {
+      expect(result.pricePerNight).toBeNull();
+      expect(result.currency).toBeNull();
+      expect(result.priceText).toBeNull();
+    });
+  });
+
+  describe("og:title summary stripping + rating fallback", () => {
+    // When there's no JSON-LD name, fall back to a cleaned og:title and parse
+    // the rating out of the ★ marker.
+    const html = `
+      <meta property="og:title" content="Cabin in Asheville · ★4.95 · 2 bedrooms · 3 beds · 1.5 baths" />
+    `;
+    const result = parseListing(html, "https://www.airbnb.com/rooms/2");
+
+    it("strips the trailing summary from og:title", () => {
+      expect(result.title).toBe("Cabin in Asheville");
     });
 
-    it("finds a currency amount near a price keyword when no JSON-LD exists", () => {
-      // Should pick a $ amount near "per night"/"night"/"total" from the body.
-      expect(result.priceText).toMatch(/\$1?[,.]?[0-9]/);
-      expect(result.priceText).toContain("$");
+    it("parses the rating from the ★ marker", () => {
+      expect(result.details.rating).toBe(4.95);
+    });
+
+    it("parses fractional baths", () => {
+      expect(result.details.baths).toBe(1.5);
+    });
+  });
+
+  describe("JSON-LD @graph + array handling", () => {
+    it("flattens a top-level array of LD objects", () => {
+      const html = `
+        <script type="application/ld+json">
+          [
+            { "@type": "BreadcrumbList" },
+            { "@type": "Product", "name": "Beach Bungalow" }
+          ]
+        </script>
+      `;
+      const result = parseListing(html, "https://example.com");
+      expect(result.title).toBe("Beach Bungalow");
+    });
+
+    it("flattens an @graph array of LD objects", () => {
+      const html = `
+        <script type="application/ld+json">
+          { "@graph": [ { "@type": "Place", "name": "Mountain Lodge" } ] }
+        </script>
+      `;
+      const result = parseListing(html, "https://example.com");
+      expect(result.title).toBe("Mountain Lodge");
+    });
+
+    it("tolerates a malformed JSON-LD block without throwing", () => {
+      const html = `
+        <script type="application/ld+json">{ not valid json,, }</script>
+        <meta property="og:title" content="Fallback Title" />
+      `;
+      const result = parseListing(html, "https://example.com");
+      expect(result.title).toBe("Fallback Title");
     });
   });
 
   describe("entity decoding", () => {
-    it("decodes named, decimal, and hex entities together", () => {
-      const html = `<meta property="og:title" content="Bed &amp; Breakfast &#39;Sunrise&#39; &#x2014; cliff &quot;view&quot;" />`;
+    it("decodes named, decimal, and hex entities together in the name", () => {
+      const html = `
+        <script type="application/ld+json">
+          { "@type": "Product", "name": "Bed &amp; Breakfast &#39;Sunrise&#39; &#x2014; cliff &quot;view&quot;" }
+        </script>
+      `;
       const { title } = parseListing(html, "https://example.com");
       expect(title).toBe("Bed & Breakfast 'Sunrise' — cliff \"view\"");
-    });
-
-    it("collapses internal whitespace and trims", () => {
-      const html = `<title>   Sea\n\t  Breeze   Cottage   </title>`;
-      const { title } = parseListing(html, "https://example.com");
-      expect(title).toBe("Sea Breeze Cottage");
     });
   });
 
   describe("title fallback", () => {
-    it("falls back to the <title> element when og:title is missing", () => {
-      const html = `<head><title>Plain Title Only</title></head>`;
+    it("falls back to og:description when there is no JSON-LD name", () => {
+      const html = `<meta property="og:description" content="A Catchy Listing Name" />`;
       const { title } = parseListing(html, "https://example.com");
-      expect(title).toBe("Plain Title Only");
+      expect(title).toBe("A Catchy Listing Name");
     });
   });
 
   describe("graceful nulls", () => {
-    it("returns all-null keys for an empty string", () => {
-      expect(parseListing("", "https://example.com")).toEqual({
-        title: null,
-        imageUrl: null,
-        priceText: null,
-        description: null,
-      });
+    const ALL_NULL = {
+      title: null,
+      imageUrl: null,
+      description: null,
+      priceText: null,
+      pricePerNight: null,
+      currency: null,
+      details: {
+        rating: null,
+        reviews: null,
+        bedrooms: null,
+        beds: null,
+        baths: null,
+        guests: null,
+      },
+    };
+
+    it("returns a fully-null ParsedListing for an empty string", () => {
+      expect(parseListing("", "https://example.com")).toEqual(ALL_NULL);
     });
 
-    it("returns all-null keys for garbage HTML with no useful data", () => {
+    it("returns all-null fields for garbage HTML with no useful data", () => {
       const result = parseListing(
         "<html><body><p>nothing useful here</p></body></html>",
         "https://example.com",
       );
-      expect(result.title).toBeNull();
-      expect(result.imageUrl).toBeNull();
-      expect(result.priceText).toBeNull();
-      expect(result.description).toBeNull();
+      expect(result).toEqual(ALL_NULL);
     });
 
-    it("always returns exactly the four expected keys", () => {
-      const result = parseListing(BOOKING_HTML, "https://example.com");
+    it("always returns the seven top-level keys with a full details object", () => {
+      const result = parseListing(AIRBNB_HTML, "https://example.com");
       expect(Object.keys(result).sort()).toEqual(
-        ["description", "imageUrl", "priceText", "title"].sort(),
+        [
+          "currency",
+          "description",
+          "details",
+          "imageUrl",
+          "pricePerNight",
+          "priceText",
+          "title",
+        ].sort(),
+      );
+      expect(Object.keys(result.details).sort()).toEqual(
+        ["bedrooms", "beds", "baths", "guests", "rating", "reviews"].sort(),
       );
     });
   });

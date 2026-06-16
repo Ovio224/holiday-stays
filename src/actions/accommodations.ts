@@ -12,7 +12,7 @@ import { assertGate } from "@/lib/gate/assert";
 import { detectSource } from "@/lib/parsing/source";
 import { fetchAndParse } from "@/lib/parsing/fetch-listing";
 import { getServiceClient } from "@/lib/supabase/server";
-import type { Accommodation, ParseStatus } from "@/lib/types";
+import type { Accommodation, ParsedListing, ParseStatus } from "@/lib/types";
 
 /**
  * Submit a new accommodation link into a stay.
@@ -27,8 +27,9 @@ export async function submitAccommodation(input: {
   stayId: string;
   memberId: string;
   title?: string;
-  priceText?: string;
   notes?: string;
+  pricePerNight?: number;
+  currency?: string;
 }): Promise<Accommodation> {
   await assertGate();
 
@@ -50,11 +51,21 @@ export async function submitAccommodation(input: {
 
   // Best-effort parse. fetchAndParse never throws, but we still guard the call
   // so a totally unexpected failure can't block a submission.
-  let parsed = { title: null, imageUrl: null, priceText: null, description: null } as {
-    title: string | null;
-    imageUrl: string | null;
-    priceText: string | null;
-    description: string | null;
+  let parsed: ParsedListing = {
+    title: null,
+    imageUrl: null,
+    description: null,
+    priceText: null,
+    pricePerNight: null,
+    currency: null,
+    details: {
+      rating: null,
+      reviews: null,
+      bedrooms: null,
+      beds: null,
+      baths: null,
+      guests: null,
+    },
   };
   let status: "ok" | "failed" = "failed";
   try {
@@ -76,9 +87,13 @@ export async function submitAccommodation(input: {
       stay_id: input.stayId,
       url,
       source,
+      // User-provided fields always win over the (usually absent) parsed ones.
       title: manualTitle || parsed.title,
       image_url: parsed.imageUrl,
-      price_text: input.priceText?.trim() || parsed.priceText,
+      details: parsed.details, // jsonb
+      price_per_night: input.pricePerNight ?? parsed.pricePerNight,
+      currency: input.currency?.trim() || parsed.currency || "$",
+      price_text: parsed.priceText, // legacy/display fallback
       notes: input.notes?.trim() || null,
       submitted_by: input.memberId,
       parse_status: parseStatus,

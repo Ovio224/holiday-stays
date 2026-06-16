@@ -1,7 +1,7 @@
 // Pure formatting + identity-color helpers shared across server and client.
 // No side effects, no env access — safe to import anywhere.
 
-import type { AccommodationSource } from "@/lib/types";
+import type { AccommodationSource, ListingDetails } from "@/lib/types";
 
 /**
  * The tropical palette assigned to members. Stable order matters: pickColor()
@@ -110,4 +110,57 @@ export function sourceLabel(source: AccommodationSource): string {
     default:
       return "Link";
   }
+}
+
+/** "4.82" (two decimals) or null when there's no rating. */
+export function formatRating(rating: number | null): string | null {
+  if (rating == null || Number.isNaN(rating)) return null;
+  return rating.toFixed(2);
+}
+
+/**
+ * Compact capacity chips from parsed details, e.g.
+ * ["6 guests", "4 bedrooms", "5 beds", "4 baths"]. Missing fields are omitted.
+ */
+export function detailChips(details: ListingDetails | null): string[] {
+  if (!details) return [];
+  const plural = (n: number, s: string) => `${n} ${s}${n === 1 ? "" : "s"}`;
+  const chips: string[] = [];
+  if (details.guests != null) chips.push(plural(details.guests, "guest"));
+  if (details.bedrooms != null) chips.push(plural(details.bedrooms, "bedroom"));
+  if (details.beds != null) chips.push(plural(details.beds, "bed"));
+  if (details.baths != null) {
+    chips.push(`${details.baths} ${details.baths === 1 ? "bath" : "baths"}`);
+  }
+  return chips;
+}
+
+/**
+ * Format a money amount with its currency: "$165" for a symbol, "165 USD" for a
+ * 3-letter code. Returns null when there's no amount. Drops trailing ".00".
+ */
+export function formatMoney(
+  amount: number | null,
+  currency: string | null,
+): string | null {
+  if (amount == null || Number.isNaN(amount)) return null;
+  const cur = (currency || "$").trim();
+  const n = Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+  return /^[A-Za-z]{2,}$/.test(cur) ? `${n} ${cur}` : `${cur}${n}`;
+}
+
+/** Nightly price × nights, or null if either is missing. */
+export function nightlyTotal(
+  pricePerNight: number | null,
+  nightCount: number | null,
+): number | null {
+  if (pricePerNight == null || nightCount == null) return null;
+  return Math.round(pricePerNight * nightCount * 100) / 100;
+}
+
+/** Pull a leading numeric amount out of a free-form price string. */
+export function parsePriceAmount(text: string | null): number | null {
+  if (!text) return null;
+  const match = text.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
 }

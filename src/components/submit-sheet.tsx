@@ -49,7 +49,8 @@ export function SubmitSheet({
   // Form field state.
   const [url, setUrl] = React.useState("");
   const [title, setTitle] = React.useState("");
-  const [priceText, setPriceText] = React.useState("");
+  const [currency, setCurrency] = React.useState("$");
+  const [pricePerNight, setPricePerNight] = React.useState("");
   const [notes, setNotes] = React.useState("");
 
   // The selected stay is DERIVED (not synced via an effect): until the user
@@ -69,7 +70,8 @@ export function SubmitSheet({
   function resetForm() {
     setUrl("");
     setTitle("");
-    setPriceText("");
+    setCurrency("$");
+    setPricePerNight("");
     setNotes("");
     setStayOverride(null);
   }
@@ -92,6 +94,12 @@ export function SubmitSheet({
     event.preventDefault();
     if (!currentMemberId || !trimmedUrl || !stayId) return;
 
+    // Only send a numeric price when the field holds a valid finite number;
+    // otherwise omit it so the server keeps its (usually parsed/null) value.
+    const parsedPrice = Number(pricePerNight);
+    const pricePerNightValue =
+      pricePerNight.trim() && Number.isFinite(parsedPrice) ? parsedPrice : undefined;
+
     startTransition(async () => {
       try {
         await submitAccommodation({
@@ -99,7 +107,8 @@ export function SubmitSheet({
           stayId,
           memberId: currentMemberId,
           title: title.trim() || undefined,
-          priceText: priceText.trim() || undefined,
+          pricePerNight: pricePerNightValue,
+          currency: currency.trim() || undefined,
           notes: notes.trim() || undefined,
         });
         toast.success("Added");
@@ -156,7 +165,7 @@ export function SubmitSheet({
             />
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <SparklesIcon className="size-3.5 text-muted-foreground" />
-              We will try to fetch the photo and details automatically.
+              We will auto-fill the name, rating and room details from the link.
             </p>
           </div>
 
@@ -205,19 +214,38 @@ export function SubmitSheet({
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="submit-price" className="text-sm font-medium text-foreground">
-              Price{" "}
+              Price / night{" "}
               <span className="font-normal text-muted-foreground">
                 (optional)
               </span>
             </Label>
-            <Input
-              id="submit-price"
-              inputMode="text"
-              placeholder="€120 / night"
-              value={priceText}
-              onChange={(e) => setPriceText(e.target.value)}
-              className="h-12 rounded-lg px-4 text-base"
-            />
+            <div className="flex items-stretch gap-2">
+              <Input
+                aria-label="Currency"
+                inputMode="text"
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                placeholder="$"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="h-12 w-16 rounded-lg px-3 text-center text-base"
+              />
+              <Input
+                id="submit-price"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="any"
+                placeholder="120"
+                value={pricePerNight}
+                onChange={(e) => setPricePerNight(e.target.value)}
+                className="h-12 flex-1 rounded-lg px-4 text-base"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Airbnb hides the price, so add it here to track budget.
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">

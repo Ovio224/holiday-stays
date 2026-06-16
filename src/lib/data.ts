@@ -41,8 +41,11 @@ export async function getMembers(): Promise<Member[]> {
   return (data ?? []) as Member[];
 }
 
-// Shape of an accommodation row with its joined votes. The votes relation may
-// come back as null/undefined from PostgREST, so we normalize it below.
+// Shape of an accommodation row with its joined votes. `select("*, votes(*)")`
+// returns every column — including the new `price_per_night`, `currency`, and
+// the `details` jsonb (decoded to a ListingDetails object or null via the
+// Accommodation type). The votes relation may come back as null/undefined from
+// PostgREST, so we normalize it to an array below.
 type AccommodationRow = Accommodation & { votes: Vote[] | null };
 
 /**

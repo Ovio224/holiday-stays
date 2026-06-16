@@ -14,8 +14,9 @@ for any multi-stop trip.
 - 🙋 **Pick-your-name** identity — see who added what and who voted which way.
 - 🗺️ **Legs** (e.g. Ubud → Canggu → Uluwatu), each with its own candidate list.
 - ⚡ **Realtime** — new places and votes appear instantly on everyone's screen.
-- 🔎 **Best-effort link parsing** — we try to grab the title/photo/price from the
-  link; you can always fill them in by hand.
+- 🔎 **Rich link parsing** — auto-fills the name, photo, rating, review count and
+  room details (guests · bedrooms · beds · baths) from Airbnb/Booking links.
+- 💸 **Budgeting** — add a nightly price (Airbnb hides it) to see the per-leg total.
 - 📱 **Mobile-first** — designed for phones, with a bottom-sheet "add a place"
   form and big thumb-friendly vote buttons.
 
@@ -97,9 +98,10 @@ Cookies are marked `secure` automatically in production (`NODE_ENV=production`).
 
 ## Notes
 
-- **Parsing is best-effort.** Airbnb and Booking.com often block server-side
-  fetches or omit OpenGraph data, in which case the card falls back to the raw
-  link and you can type the title/price yourself. This is expected.
+- **Parsing is best-effort.** We read OpenGraph tags + JSON-LD, so Airbnb/Booking
+  links auto-fill the name, photo, rating, reviews and room details. **Price is the
+  exception** — Airbnb computes it per-dates after login and never ships it in the
+  page, so add a nightly price by hand to drive the budget totals.
 - Voting is a toggle: tap 👍 or 👎 to vote, tap the same side again to clear your
   vote, or tap the other side to switch.
 

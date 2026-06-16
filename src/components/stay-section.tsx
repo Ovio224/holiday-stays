@@ -95,6 +95,7 @@ export function StaySection({
               accommodation={accommodation}
               members={members}
               currentMemberId={currentMemberId}
+              stayNights={nightCount}
             />
           ))}
         </div>

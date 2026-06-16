@@ -27,7 +27,10 @@ export interface Accommodation {
   source: AccommodationSource;
   title: string | null;
   image_url: string | null;
-  price_text: string | null;
+  price_text: string | null; // legacy / free-form
+  price_per_night: number | null; // numeric nightly price (for budgeting)
+  currency: string | null; // currency symbol/code for price_per_night
+  details: ListingDetails | null; // parsed structured details (jsonb column)
   notes: string | null;
   submitted_by: string | null;
   parse_status: ParseStatus;
@@ -43,11 +46,24 @@ export interface Vote {
   updated_at: string;
 }
 
+/** Structured details parsed from a listing (rating + capacity). */
+export interface ListingDetails {
+  rating: number | null; // e.g. 4.82
+  reviews: number | null; // review count
+  bedrooms: number | null;
+  beds: number | null;
+  baths: number | null; // may be fractional (1.5)
+  guests: number | null; // max guests
+}
+
 export interface ParsedListing {
   title: string | null;
   imageUrl: string | null;
-  priceText: string | null;
   description: string | null;
+  priceText: string | null; // raw price string, best-effort
+  pricePerNight: number | null; // numeric nightly price, best-effort (often null)
+  currency: string | null; // e.g. "$", "USD", "€"
+  details: ListingDetails;
 }
 
 // View model the board renders: an accommodation with its votes joined in.

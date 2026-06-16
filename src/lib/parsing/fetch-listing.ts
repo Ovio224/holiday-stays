@@ -18,8 +18,18 @@ const TIMEOUT_MS = 8000;
 const EMPTY: ParsedListing = {
   title: null,
   imageUrl: null,
-  priceText: null,
   description: null,
+  priceText: null,
+  pricePerNight: null,
+  currency: null,
+  details: {
+    rating: null,
+    reviews: null,
+    bedrooms: null,
+    beds: null,
+    baths: null,
+    guests: null,
+  },
 };
 
 /**
