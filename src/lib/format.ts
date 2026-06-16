@@ -2,6 +2,7 @@
 // No side effects, no env access — safe to import anywhere.
 
 import type { AccommodationSource, ListingDetails } from "@/lib/types";
+import { effectiveNightly } from "@/lib/prices";
 
 /**
  * The tropical palette assigned to members. Stable order matters: pickColor()
@@ -83,6 +84,29 @@ export function formatDateRange(start: string | null, end: string | null): strin
 
   // Spans months -> "Aug 28 - Sep 2".
   return `${startMonth} ${startDay} - ${endMonth} ${endDay}`;
+}
+
+/**
+ * A single date range covering the whole trip: earliest start_date → latest
+ * end_date across all stays, rendered via formatDateRange. Returns "" when no
+ * dated stays exist. Pure — derives the live trip-dates banner in the board.
+ */
+export function tripDateRange(
+  stays: { start_date: string | null; end_date: string | null }[],
+): string {
+  let earliest: string | null = null;
+  let latest: string | null = null;
+
+  for (const stay of stays) {
+    if (stay.start_date && (!earliest || stay.start_date < earliest)) {
+      earliest = stay.start_date;
+    }
+    if (stay.end_date && (!latest || stay.end_date > latest)) {
+      latest = stay.end_date;
+    }
+  }
+
+  return formatDateRange(earliest, latest);
 }
 
 /**
@@ -181,6 +205,8 @@ interface BudgetLeg {
     price_per_night: number | null;
     currency: string | null;
     votes: { value: boolean }[];
+    /** Per-member prices (per night). When present, the cheapest one is used. */
+    prices?: { amount: number }[] | null;
   }[];
 }
 
@@ -189,8 +215,11 @@ interface BudgetLeg {
  * least one priced option (and a known night count) we take both the cheapest
  * option and the "leading" pick (highest net yes-votes, ties broken by price),
  * each costed as price/night × the leg's nights, and sum them across legs.
- * Currencies are assumed uniform (the first priced leg's currency is used; no
- * conversion is performed).
+ *
+ * Each option is costed at its *effective* nightly price: the cheapest price any
+ * member has entered for it (the real, bookable deal), falling back to the parsed
+ * standard price when no one has. Currencies are assumed uniform (the first priced
+ * leg's currency is used; no conversion is performed).
  */
 export function tripBudget(legs: BudgetLeg[]): TripBudget {
   let leadingTotal = 0;
@@ -203,16 +232,20 @@ export function tripBudget(legs: BudgetLeg[]): TripBudget {
     const nightCount = leg.nights ?? 0;
     if (nightCount <= 0) continue;
 
-    const priced = leg.accommodations.filter((a) => a.price_per_night != null);
+    const priced = leg.accommodations
+      .map((a) => ({ a, nightly: effectiveNightly(a) }))
+      .filter((x): x is { a: (typeof leg.accommodations)[number]; nightly: number } =>
+        x.nightly != null,
+      );
     if (priced.length === 0) continue;
 
     if (!currencySet) {
-      currency = priced[0].currency || "$";
+      currency = priced[0].a.currency || "$";
       currencySet = true;
     }
 
-    const costed = priced.map((a) => ({
-      cost: (a.price_per_night as number) * nightCount,
+    const costed = priced.map(({ a, nightly }) => ({
+      cost: nightly * nightCount,
       net: a.votes.reduce((s, v) => s + (v.value ? 1 : -1), 0),
     }));
 

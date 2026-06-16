@@ -5,20 +5,22 @@
 // as a StaySection, and owns the "add a place" bottom-sheet.
 
 import * as React from "react";
-import { CalendarDays, PlusIcon, Wallet } from "lucide-react";
+import { CalendarDays, Plus, PlusIcon, Wallet } from "lucide-react";
+import { toast } from "sonner";
 
 import type { Stay, AccommodationWithVotes, Member } from "@/lib/types";
-import { formatMoney, nights, tripBudget } from "@/lib/format";
+import { formatMoney, nights, tripBudget, tripDateRange } from "@/lib/format";
+import { reorderStay } from "@/actions/stays";
 import { useRealtimeBoard } from "@/hooks/use-realtime-board";
 import { StaySection } from "@/components/stay-section";
 import { SubmitSheet } from "@/components/submit-sheet";
+import { LegSheet } from "@/components/leg-sheet";
 
 interface TripBoardProps {
   initialStays: Stay[];
   initialAccommodations: AccommodationWithVotes[];
   members: Member[];
   currentMemberId: string | null;
-  tripRange: string;
 }
 
 export function TripBoard({
@@ -26,10 +28,15 @@ export function TripBoard({
   initialAccommodations,
   members,
   currentMemberId,
-  tripRange,
 }: TripBoardProps) {
-  // Live accommodations + members; stays are static for the session.
-  const { accommodations, members: liveMembers } = useRealtimeBoard({
+  // Everything live: stays, accommodations, and members all stream in via the
+  // realtime subscription, so the board, banner, and budget recompute together.
+  const {
+    stays,
+    accommodations,
+    members: liveMembers,
+  } = useRealtimeBoard({
+    initialStays,
     initialAccommodations,
     initialMembers: members,
   });
@@ -55,11 +62,51 @@ export function TripBoard({
     setSubmitOpen(true);
   }, []);
 
-  // Stays in display order.
-  const sortedStays = React.useMemo(
-    () => [...initialStays].sort((a, b) => a.sort_order - b.sort_order),
-    [initialStays],
+  // Leg-editor state. editingStay null = create mode; a stay = edit mode. The
+  // LegSheet is keyed on the target so it remounts (and re-seeds fields) cleanly.
+  const [legSheetOpen, setLegSheetOpen] = React.useState(false);
+  const [editingStay, setEditingStay] = React.useState<Stay | null>(null);
+
+  const openCreateLeg = React.useCallback(() => {
+    setEditingStay(null);
+    setLegSheetOpen(true);
+  }, []);
+
+  const openEditLeg = React.useCallback((stay: Stay) => {
+    setEditingStay(stay);
+    setLegSheetOpen(true);
+  }, []);
+
+  // Reorder a leg one step; the realtime stays subscription reflects the swap.
+  const moveLeg = React.useCallback(
+    (id: string, direction: "up" | "down") => {
+      void (async () => {
+        try {
+          await reorderStay(id, direction);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Could not reorder that leg.";
+          toast.error(message);
+        }
+      })();
+    },
+    [],
   );
+
+  // Stays in display order, derived from live state (sort_order, then stable by
+  // created_at to break ties from concurrent appends).
+  const sortedStays = React.useMemo(
+    () =>
+      [...stays].sort(
+        (a, b) =>
+          a.sort_order - b.sort_order ||
+          a.created_at.localeCompare(b.created_at),
+      ),
+    [stays],
+  );
+
+  // Live trip-dates banner: earliest start → latest end across live stays.
+  const tripRange = React.useMemo(() => tripDateRange(stays), [stays]);
 
   // Bucket accommodations by stay_id once per change.
   const byStay = React.useMemo(() => {
@@ -132,7 +179,7 @@ export function TripBoard({
       </header>
 
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-10 px-4 pb-32 sm:px-6">
-        {sortedStays.map((stay) => (
+        {sortedStays.map((stay, index) => (
           <StaySection
             key={stay.id}
             stay={stay}
@@ -140,8 +187,24 @@ export function TripBoard({
             members={liveMembers}
             currentMemberId={currentMemberId}
             onAdd={openSubmitFor}
+            onEdit={openEditLeg}
+            onMoveUp={(id) => moveLeg(id, "up")}
+            onMoveDown={(id) => moveLeg(id, "down")}
+            isFirst={index === 0}
+            isLast={index === sortedStays.length - 1}
           />
         ))}
+
+        {/* Add-a-leg entry point — a dashed tile after the last section,
+            styled like the empty-state tiles. Opens the sheet in create mode. */}
+        <button
+          type="button"
+          onClick={openCreateLeg}
+          className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/40 px-6 py-10 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Plus className="size-4" aria-hidden />
+          Add a leg
+        </button>
       </div>
 
       {/* Floating "add a place" action — bottom-right, thumb-friendly. */}
@@ -156,11 +219,19 @@ export function TripBoard({
       </button>
 
       <SubmitSheet
-        stays={initialStays}
+        stays={sortedStays}
         currentMemberId={currentMemberId}
         open={submitOpen}
         onOpenChange={setSubmitOpen}
         defaultStayId={submitStayId}
+      />
+
+      {/* Leg editor — keyed on the target so fields re-seed on each open. */}
+      <LegSheet
+        open={legSheetOpen}
+        onOpenChange={setLegSheetOpen}
+        stay={editingStay}
+        key={editingStay?.id ?? "new"}
       />
     </div>
   );

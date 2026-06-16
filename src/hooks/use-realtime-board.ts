@@ -18,6 +18,7 @@ import type {
   Accommodation,
   AccommodationWithVotes,
   Member,
+  Stay,
   Vote,
 } from "@/lib/types";
 
@@ -36,13 +37,28 @@ type ChangePayload = {
 };
 
 interface UseRealtimeBoardArgs {
+  initialStays: Stay[];
   initialAccommodations: AccommodationWithVotes[];
   initialMembers: Member[];
 }
 
 interface UseRealtimeBoardResult {
+  stays: Stay[];
   accommodations: AccommodationWithVotes[];
   members: Member[];
+}
+
+/** Upsert a stay row by id (replace-or-insert), tolerant of out-of-order events. */
+function upsertStay(list: Stay[], row: Stay): Stay[] {
+  const existing = list.some((s) => s.id === row.id);
+  return existing
+    ? list.map((s) => (s.id === row.id ? row : s))
+    : [...list, row];
+}
+
+/** Remove a stay (by id). */
+function removeStay(list: Stay[], stayId: string): Stay[] {
+  return list.filter((s) => s.id !== stayId);
 }
 
 /** Upsert an accommodation row while preserving its existing votes array. */
@@ -88,9 +104,11 @@ function removeVote(
 }
 
 export function useRealtimeBoard({
+  initialStays,
   initialAccommodations,
   initialMembers,
 }: UseRealtimeBoardArgs): UseRealtimeBoardResult {
+  const [stays, setStays] = useState<Stay[]>(initialStays);
   const [accommodations, setAccommodations] =
     useState<AccommodationWithVotes[]>(initialAccommodations);
   const [members, setMembers] = useState<Member[]>(initialMembers);
@@ -106,6 +124,23 @@ export function useRealtimeBoard({
 
     const channel = supabase
       .channel("trip-board")
+      // --- stays ----------------------------------------------------------
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "bali", table: "stays" },
+        (payload: ChangePayload) => {
+          if (payload.eventType === "DELETE") {
+            const oldId = (payload.old as Partial<Stay>).id;
+            if (!oldId) return;
+            setStays((prev) => removeStay(prev, oldId));
+            return;
+          }
+          // INSERT or UPDATE → upsert by id (replace-or-insert).
+          const row = payload.new as unknown as Stay;
+          if (!row?.id) return;
+          setStays((prev) => upsertStay(prev, row));
+        },
+      )
       // --- accommodations -------------------------------------------------
       .on(
         "postgres_changes",
@@ -161,5 +196,5 @@ export function useRealtimeBoard({
     };
   }, []);
 
-  return { accommodations, members };
+  return { stays, accommodations, members };
 }
