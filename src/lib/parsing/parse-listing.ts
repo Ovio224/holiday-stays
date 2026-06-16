@@ -361,23 +361,22 @@ export function parseListing(html: string, url: string): ParsedListing {
     toNumber(aggregate?.["reviewCount"]);
 
   // --- capacity details ----------------------------------------------------
-  // Prefer the compact og:title summary; fall back to the whole HTML.
+  // ONLY from the compact og:title summary (Airbnb: "… · 4 bedrooms · 5 beds ·
+  // 4 baths") and JSON-LD occupancy. We deliberately do NOT scan the whole page:
+  // a hotel listing (Booking) has no single listing-level capacity, and a regex
+  // over all the HTML matches arbitrary text — asset labels like "0026 Beds",
+  // room blurbs like "1 bathroom" — which produced nonsense chips.
   const summarySource = ogTitle ?? "";
-  const bedrooms =
-    matchNumber(summarySource, /(\d+)\s+bedrooms?/i) ??
-    matchNumber(html, /(\d+)\s+bedrooms?/i);
-  // Note the trailing \b so "beds" never matches inside "bedrooms"
+  const bedrooms = matchNumber(summarySource, /(\d+)\s+bedrooms?/i);
+  // The trailing \b stops "beds" matching inside "bedrooms"
   // (e.g. "4 bedrooms · 5 beds" must yield 5, not 4).
-  const beds =
-    matchNumber(summarySource, /(\d+)\s+beds?\b/i) ??
-    matchNumber(html, /(\d+)\s+beds?\b/i);
-  const baths =
-    matchNumber(summarySource, /([\d.]+)\s+(?:private\s+|shared\s+)?baths?/i) ??
-    matchNumber(html, /([\d.]+)\s+(?:private\s+|shared\s+)?baths?/i);
+  const beds = matchNumber(summarySource, /(\d+)\s+beds?\b/i);
+  const baths = matchNumber(
+    summarySource,
+    /([\d.]+)\s+(?:private\s+|shared\s+)?baths?/i,
+  );
   const guests =
-    guestsFromJsonLd(merged) ??
-    matchNumber(summarySource, /(\d+)\s+guests?/i) ??
-    matchNumber(html, /(\d+)\s+guests?/i);
+    guestsFromJsonLd(merged) ?? matchNumber(summarySource, /(\d+)\s+guests?/i);
 
   // --- price ---------------------------------------------------------------
   const { pricePerNight, currency, priceText } = priceFromOffers(merged);

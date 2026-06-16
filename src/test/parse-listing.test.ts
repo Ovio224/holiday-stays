@@ -225,6 +225,46 @@ describe("parseListing", () => {
     });
   });
 
+  describe("capacity is never scraped from arbitrary page text", () => {
+    // A real Booking hotel page: og:title carries NO capacity summary, but the
+    // body HTML contains stray strings — an asset label "0026 Beds" and a room
+    // blurb "1 bathroom". The old whole-HTML fallback turned these into a bogus
+    // "26 beds · 1 bath" chip. A hotel has no listing-level capacity, so these
+    // must all be null.
+    const html = `
+      <meta property="og:title" content="The Mesare Eco Resort, Nusa Penida, Indonesia" />
+      <script type="application/ld+json">
+        {
+          "@type": "Hotel",
+          "name": "The Mesare Eco Resort",
+          "aggregateRating": { "@type": "AggregateRating", "ratingValue": 8.8, "bestRating": 10, "reviewCount": 1033 }
+        }
+      </script>
+      <body>
+        <img alt="0026 Beds" />
+        <div>Deluxe Bungalow · 1 bathroom · 1 bed · sleeps 4 guests</div>
+      </body>
+    `;
+    const result = parseListing(
+      html,
+      "https://www.booking.com/hotel/id/the-mesare-resort.html",
+    );
+
+    it("does not invent bedrooms/beds/baths/guests from body text", () => {
+      expect(result.details.beds).toBeNull();
+      expect(result.details.baths).toBeNull();
+      expect(result.details.bedrooms).toBeNull();
+      expect(result.details.guests).toBeNull();
+    });
+
+    it("still extracts the real title + rating from a Booking hotel page", () => {
+      expect(result.title).toBe("The Mesare Eco Resort");
+      expect(result.details.rating).toBe(8.8);
+      expect(result.details.ratingScale).toBe(10);
+      expect(result.details.reviews).toBe(1033);
+    });
+  });
+
   describe("og:title summary stripping + rating fallback", () => {
     // When there's no JSON-LD name, fall back to a cleaned og:title and parse
     // the rating out of the ★ marker.
