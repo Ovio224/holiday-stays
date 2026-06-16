@@ -9,10 +9,19 @@
  * "failed" status with empty metadata. Both actions are gated.
  */
 import { assertGate } from "@/lib/gate/assert";
+import {
+  prepareAccommodationEdit,
+  type AccommodationEditInput,
+} from "@/lib/accommodations";
 import { detectSource } from "@/lib/parsing/source";
 import { fetchAndParse } from "@/lib/parsing/fetch-listing";
 import { getServiceClient } from "@/lib/supabase/server";
-import type { Accommodation, ParsedListing, ParseStatus } from "@/lib/types";
+import type {
+  Accommodation,
+  ListingDetails,
+  ParsedListing,
+  ParseStatus,
+} from "@/lib/types";
 
 /**
  * Submit a new accommodation link into a stay.
@@ -105,6 +114,74 @@ export async function submitAccommodation(input: {
   if (error || !data) {
     throw new Error(
       `Failed to submit accommodation: ${error?.message ?? "no data"}`,
+    );
+  }
+
+  return data as Accommodation;
+}
+
+/**
+ * Edit an existing accommodation's user-curated fields: title, image URL, price,
+ * currency, address, amenities, notes, and the capacity portion of `details`.
+ *
+ * Validation/normalization is delegated to the pure prepareAccommodationEdit()
+ * helper so it's unit-testable without a DB. The capacity edits are MERGED into
+ * the row's current `details` so parsed rating/reviews are never clobbered. When
+ * the user supplies a title we flip parse_status to "manual" (mirroring submit
+ * semantics for a curated card). Returns the updated row.
+ */
+export async function updateAccommodation(
+  input: { id: string } & AccommodationEditInput,
+): Promise<Accommodation> {
+  await assertGate();
+
+  const { id, ...rest } = input;
+  const normalized = prepareAccommodationEdit(rest);
+
+  const supabase = getServiceClient();
+
+  // Fetch the current details so we can overlay only the edited capacity keys,
+  // leaving parsed rating/reviews (and any unedited capacity field) intact.
+  const { data: existing, error: fetchError } = await supabase
+    .from("accommodations")
+    .select("details")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !existing) {
+    throw new Error(
+      `Failed to load accommodation: ${fetchError?.message ?? "not found"}`,
+    );
+  }
+
+  const currentDetails = (existing.details ?? {}) as Partial<ListingDetails>;
+  const mergedDetails = { ...currentDetails, ...normalized.details };
+
+  const update: Record<string, unknown> = {
+    title: normalized.title,
+    image_url: normalized.image_url,
+    notes: normalized.notes,
+    address: normalized.address,
+    amenities: normalized.amenities,
+    price_per_night: normalized.price_per_night,
+    currency: normalized.currency,
+    details: mergedDetails,
+  };
+  // A manually supplied title means the user curated this card themselves.
+  if (normalized.title) {
+    update.parse_status = "manual" satisfies ParseStatus;
+  }
+
+  const { data, error } = await supabase
+    .from("accommodations")
+    .update(update)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(
+      `Failed to update accommodation: ${error?.message ?? "no data"}`,
     );
   }
 

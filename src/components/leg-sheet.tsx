@@ -39,9 +39,22 @@ interface LegSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   stay: Stay | null;
+  /**
+   * Called with the row returned by createStay/updateStay so the board reflects
+   * the change immediately — no dependency on the realtime echo arriving.
+   */
+  onSaved?: (stay: Stay) => void;
+  /** Called with the deleted leg's id so the board drops it immediately. */
+  onDeleted?: (stayId: string) => void;
 }
 
-export function LegSheet({ open, onOpenChange, stay }: LegSheetProps) {
+export function LegSheet({
+  open,
+  onOpenChange,
+  stay,
+  onSaved,
+  onDeleted,
+}: LegSheetProps) {
   const isEdit = stay !== null;
   const [isPending, startTransition] = React.useTransition();
   const [isDeleting, startDeleteTransition] = React.useTransition();
@@ -72,13 +85,11 @@ export function LegSheet({ open, onOpenChange, stay }: LegSheetProps) {
           startDate: startDate || null,
           endDate: endDate || null,
         };
-        if (isEdit) {
-          await updateStay({ id: stay.id, ...fields });
-          toast.success("Saved");
-        } else {
-          await createStay(fields);
-          toast.success("Added");
-        }
+        const saved = isEdit
+          ? await updateStay({ id: stay.id, ...fields })
+          : await createStay(fields);
+        onSaved?.(saved);
+        toast.success(isEdit ? "Saved" : "Added");
         onOpenChange(false);
       } catch (error) {
         const message =
@@ -93,6 +104,7 @@ export function LegSheet({ open, onOpenChange, stay }: LegSheetProps) {
     startDeleteTransition(async () => {
       try {
         await deleteStay(stay.id);
+        onDeleted?.(stay.id);
         toast.success("Leg removed");
         setConfirmOpen(false);
         onOpenChange(false);

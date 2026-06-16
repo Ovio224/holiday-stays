@@ -48,9 +48,11 @@ export function StaySection({
   const metaParts = [range, nightLabel].filter(Boolean);
 
   return (
-    <section className="flex flex-col gap-4">
-      {/* Leg header — label + date/nights meta on the left, add on the right. */}
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <section className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(220px,260px)_1fr] lg:items-start lg:gap-8 xl:gap-10">
+      {/* Leg header. A wrapping row above the cards on mobile; on desktop it
+          becomes a sticky left rail so the leg's name, dates and controls stay
+          in view while you scroll its candidates. */}
+      <header className="flex flex-wrap items-end justify-between gap-3 lg:sticky lg:top-6 lg:flex-col lg:items-start lg:justify-start lg:gap-5 lg:self-start">
         <div className="flex flex-col gap-1.5">
           <h2 className="text-xl font-semibold leading-tight text-foreground">
             {stay.label}
@@ -130,17 +132,23 @@ export function StaySection({
           </Button>
         </div>
       ) : (
-        // Responsive card grid: 1 col on phones, 2 on small, 3 on large.
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {accommodations.map((accommodation) => (
-            <AccommodationCard
-              key={accommodation.id}
-              accommodation={accommodation}
-              members={members}
-              currentMemberId={currentMemberId}
-              stayNights={nightCount}
-            />
-          ))}
+        // Card grid sized by container queries: it responds to the column's
+        // OWN width, so it lays out correctly whether it's the full board width
+        // (mobile) or the narrower right-hand column beside the desktop rail.
+        <div className="@container">
+          <div className="grid grid-cols-1 gap-4 @md:grid-cols-2 @md:gap-5 @4xl:grid-cols-3">
+            {accommodations.map((accommodation) => (
+              <AccommodationCard
+                key={accommodation.id}
+                accommodation={accommodation}
+                members={members}
+                currentMemberId={currentMemberId}
+                stayArea={stay.area}
+                stayLabel={stay.label}
+                stayNights={nightCount}
+              />
+            ))}
+          </div>
         </div>
       )}
     </section>

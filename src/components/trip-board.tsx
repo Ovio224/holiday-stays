@@ -35,6 +35,8 @@ export function TripBoard({
     stays,
     accommodations,
     members: liveMembers,
+    applyStayUpsert,
+    applyStayRemoval,
   } = useRealtimeBoard({
     initialStays,
     initialAccommodations,
@@ -77,22 +79,6 @@ export function TripBoard({
     setLegSheetOpen(true);
   }, []);
 
-  // Reorder a leg one step; the realtime stays subscription reflects the swap.
-  const moveLeg = React.useCallback(
-    (id: string, direction: "up" | "down") => {
-      void (async () => {
-        try {
-          await reorderStay(id, direction);
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Could not reorder that leg.";
-          toast.error(message);
-        }
-      })();
-    },
-    [],
-  );
-
   // Stays in display order, derived from live state (sort_order, then stable by
   // created_at to break ties from concurrent appends).
   const sortedStays = React.useMemo(
@@ -103,6 +89,40 @@ export function TripBoard({
           a.created_at.localeCompare(b.created_at),
       ),
     [stays],
+  );
+
+  // Reorder a leg one step. Swap the two neighbours' sort_order in local state
+  // immediately (optimistic) so the move is instant, then persist; the realtime
+  // echo replays the same swap (idempotent by id). On failure, put the original
+  // rows back so the UI never lies about what's saved.
+  const moveLeg = React.useCallback(
+    (id: string, direction: "up" | "down") => {
+      const index = sortedStays.findIndex((s) => s.id === id);
+      if (index === -1) return;
+      const neighborIndex = direction === "up" ? index - 1 : index + 1;
+      if (neighborIndex < 0 || neighborIndex >= sortedStays.length) return;
+
+      const current = sortedStays[index];
+      const neighbor = sortedStays[neighborIndex];
+
+      // Optimistic swap of their sort_order values.
+      applyStayUpsert({ ...current, sort_order: neighbor.sort_order });
+      applyStayUpsert({ ...neighbor, sort_order: current.sort_order });
+
+      void (async () => {
+        try {
+          await reorderStay(id, direction);
+        } catch (error) {
+          // Roll back to the pre-swap ordering.
+          applyStayUpsert(current);
+          applyStayUpsert(neighbor);
+          const message =
+            error instanceof Error ? error.message : "Could not reorder that leg.";
+          toast.error(message);
+        }
+      })();
+    },
+    [sortedStays, applyStayUpsert],
   );
 
   // Live trip-dates banner: earliest start → latest end across live stays.
@@ -136,49 +156,66 @@ export function TripBoard({
 
   return (
     <div className="relative">
-      <header className="mx-auto mb-8 w-full max-w-2xl px-4 sm:px-6">
-        <p className="mb-2 text-sm text-muted-foreground">
-          {friendCount === 1
-            ? "Just you, for now"
-            : `${friendCount} friends · ${placeCount} ${placeCount === 1 ? "place" : "places"}`}
-        </p>
-        <h1 className="text-4xl font-bold tracking-tight text-primary sm:text-5xl">
-          Bali Stays
-        </h1>
-        <p className="mt-3 text-base text-muted-foreground">
-          Add the places you love, vote yes or no, and find your home base
-          together.
-        </p>
-        {tripRange && (
-          <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-muted px-4 py-1.5 text-sm font-medium text-foreground">
-            <CalendarDays className="size-4 text-muted-foreground" aria-hidden />
-            {tripRange}
-          </p>
-        )}
-
-        {budget.leadingTotal != null && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-            <span className="text-muted-foreground">Estimated trip total</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1 font-semibold text-white">
-              <Wallet className="size-3.5" aria-hidden />
-              {formatMoney(budget.leadingTotal, budget.currency)}
-            </span>
-            {budget.cheapestTotal != null &&
-              budget.cheapestTotal < budget.leadingTotal && (
-                <span className="text-muted-foreground">
-                  · from {formatMoney(budget.cheapestTotal, budget.currency)}
-                </span>
-              )}
-            {budget.pricedLegs < budget.totalLegs && (
-              <span className="text-muted-foreground">
-                · {budget.pricedLegs}/{budget.totalLegs} legs priced
-              </span>
-            )}
+      <header className="mx-auto mb-10 w-full max-w-2xl px-4 sm:px-6 lg:mb-16 lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-12">
+          {/* Title + intro — capped to a comfortable reading measure. */}
+          <div className="max-w-xl">
+            <p className="mb-2 text-sm text-muted-foreground">
+              {friendCount === 1
+                ? "Just you, for now"
+                : `${friendCount} friends · ${placeCount} ${placeCount === 1 ? "place" : "places"}`}
+            </p>
+            <h1 className="text-4xl font-bold tracking-tight text-primary sm:text-5xl">
+              Bali Stays
+            </h1>
+            <p className="mt-3 text-base text-muted-foreground">
+              Add the places you love, vote yes or no, and find your home base
+              together.
+            </p>
           </div>
-        )}
+
+          {/* Trip meta — date range + live budget. Sits beside the title on
+              desktop, stacks beneath it on mobile. */}
+          {(tripRange || budget.leadingTotal != null) && (
+            <div className="flex flex-col gap-3 lg:items-end">
+              {tripRange && (
+                <p className="inline-flex w-fit items-center gap-2 rounded-full bg-muted px-4 py-1.5 text-sm font-medium text-foreground">
+                  <CalendarDays
+                    className="size-4 text-muted-foreground"
+                    aria-hidden
+                  />
+                  {tripRange}
+                </p>
+              )}
+
+              {budget.leadingTotal != null && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm lg:justify-end">
+                  <span className="text-muted-foreground">
+                    Estimated trip total
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1 font-semibold text-white">
+                    <Wallet className="size-3.5" aria-hidden />
+                    {formatMoney(budget.leadingTotal, budget.currency)}
+                  </span>
+                  {budget.cheapestTotal != null &&
+                    budget.cheapestTotal < budget.leadingTotal && (
+                      <span className="text-muted-foreground">
+                        · from {formatMoney(budget.cheapestTotal, budget.currency)}
+                      </span>
+                    )}
+                  {budget.pricedLegs < budget.totalLegs && (
+                    <span className="text-muted-foreground">
+                      · {budget.pricedLegs}/{budget.totalLegs} legs priced
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-10 px-4 pb-32 sm:px-6">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-10 px-4 pb-32 sm:px-6 lg:max-w-5xl lg:gap-16 xl:max-w-6xl 2xl:max-w-7xl">
         {sortedStays.map((stay, index) => (
           <StaySection
             key={stay.id}
@@ -226,11 +263,15 @@ export function TripBoard({
         defaultStayId={submitStayId}
       />
 
-      {/* Leg editor — keyed on the target so fields re-seed on each open. */}
+      {/* Leg editor — keyed on the target so fields re-seed on each open. The
+          onSaved/onDeleted callbacks fold the server-action result straight into
+          live state, so the acting user sees the change without a refresh. */}
       <LegSheet
         open={legSheetOpen}
         onOpenChange={setLegSheetOpen}
         stay={editingStay}
+        onSaved={applyStayUpsert}
+        onDeleted={applyStayRemoval}
         key={editingStay?.id ?? "new"}
       />
     </div>

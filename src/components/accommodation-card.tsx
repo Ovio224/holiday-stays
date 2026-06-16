@@ -10,6 +10,7 @@ import Link from "next/link";
 import { ImageOff, Star } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { AccommodationDetailDialog } from "@/components/accommodation-detail-dialog";
 import { PriceChart } from "@/components/price-chart";
 import { VoteButtons } from "@/components/vote-buttons";
 import { VoterChips } from "@/components/voter-chips";
@@ -26,6 +27,9 @@ interface AccommodationCardProps {
   accommodation: AccommodationWithVotes;
   members: Member[];
   currentMemberId: string | null;
+  /** This leg's area + label — passed through to the detail dialog (map + header). */
+  stayArea: string | null;
+  stayLabel: string;
   /** Nights for this leg — used to compute the budget total. */
   stayNights: number | null;
 }
@@ -34,6 +38,8 @@ export function AccommodationCard({
   accommodation,
   members,
   currentMemberId,
+  stayArea,
+  stayLabel,
   stayNights,
 }: AccommodationCardProps) {
   const { votes, prices, details } = accommodation;
@@ -153,6 +159,16 @@ export function AccommodationCard({
         {/* Push the price comparison + voting controls to the bottom so cards
             align on a grid. */}
         <div className="mt-auto flex flex-col gap-3 pt-2">
+          {/* Expand into the full detail + edit dialog (client island). */}
+          <AccommodationDetailDialog
+            accommodation={accommodation}
+            members={members}
+            currentMemberId={currentMemberId}
+            stayArea={stayArea}
+            stayLabel={stayLabel}
+            stayNights={stayNights}
+          />
+
           {/* Per-member price comparison — who has the best deal & books. */}
           <PriceChart
             accommodationId={accommodation.id}

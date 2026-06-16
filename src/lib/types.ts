@@ -31,6 +31,8 @@ export interface Accommodation {
   price_per_night: number | null; // numeric nightly price (for budgeting)
   currency: string | null; // currency symbol/code for price_per_night
   details: ListingDetails | null; // parsed structured details (jsonb column)
+  address: string | null; // user-entered location, for the map + display
+  amenities: string[] | null; // user-entered amenity list
   notes: string | null;
   submitted_by: string | null;
   parse_status: ParseStatus;

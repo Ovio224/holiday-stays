@@ -11,7 +11,7 @@
 // - An accommodation INSERT/UPDATE must never clobber the votes we already hold,
 //   because the realtime payload for `accommodations` has no votes column.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { getBrowserClient } from "@/lib/supabase/browser";
 import type {
@@ -47,6 +47,16 @@ interface UseRealtimeBoardResult {
   stays: Stay[];
   accommodations: AccommodationWithVotes[];
   members: Member[];
+  /**
+   * Imperatively merge a stay the caller just wrote (the return value of a
+   * create/update server action) into local state, without waiting for the
+   * realtime round-trip. Keyed by id, so the realtime echo that follows is an
+   * idempotent no-op. This is what lets the acting user see their own edit
+   * instantly — even if the stays table isn't in the realtime publication.
+   */
+  applyStayUpsert: (stay: Stay) => void;
+  /** Imperatively drop a stay the caller just deleted (same rationale). */
+  applyStayRemoval: (stayId: string) => void;
 }
 
 /** Upsert a stay row by id (replace-or-insert), tolerant of out-of-order events. */
@@ -143,6 +153,19 @@ export function useRealtimeBoard({
   const [accommodations, setAccommodations] =
     useState<AccommodationWithVotes[]>(initialAccommodations);
   const [members, setMembers] = useState<Member[]>(initialMembers);
+
+  // Imperative, locally-applied mutations for the acting user. They run through
+  // the very same reducers the realtime handlers use, so applying a freshly
+  // written row here and later receiving its realtime echo converge to the same
+  // state (replace-or-insert / remove are both idempotent by id).
+  const applyStayUpsert = useCallback(
+    (stay: Stay) => setStays((prev) => upsertStay(prev, stay)),
+    [],
+  );
+  const applyStayRemoval = useCallback(
+    (stayId: string) => setStays((prev) => removeStay(prev, stayId)),
+    [],
+  );
 
   // State seeds once from the server snapshot (the useState initializers above);
   // after mount the realtime subscription below is the source of truth. Landing
@@ -243,5 +266,5 @@ export function useRealtimeBoard({
     };
   }, []);
 
-  return { stays, accommodations, members };
+  return { stays, accommodations, members, applyStayUpsert, applyStayRemoval };
 }

@@ -121,6 +121,20 @@ grant all on all sequences in schema bali to service_role;
 alter publication supabase_realtime
   add table bali.accommodations, bali.votes, bali.members;
 
+-- bali.stays was added to the publication later, when in-app leg management
+-- shipped (add/edit/remove/reorder legs). Without this, leg edits never stream
+-- to the browser and the acting user has to refresh to see their own change.
+-- Guarded so it's safe to run on a project that was set up before legs existed.
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'bali' and tablename = 'stays'
+  ) then
+    alter publication supabase_realtime add table bali.stays;
+  end if;
+end $$;
+
 -- ── columns added later ────────────────────────────────────────────
 -- Richer parsed listing data + structured pricing for budgeting.
 --
@@ -137,6 +151,13 @@ comment on column bali.accommodations.details is
 
 -- Existing table grants (anon SELECT, service_role ALL) and the realtime
 -- publication automatically cover these new columns — no extra policy needed.
+
+-- ── user-entered detail fields: address (for the map) + amenities ───
+-- A free-form address powers the keyless Google Maps embed in the detail dialog;
+-- amenities is a user-entered list. Both nullable; existing grants + realtime
+-- publication cover the new columns automatically — no extra policy needed.
+alter table bali.accommodations add column if not exists address   text;
+alter table bali.accommodations add column if not exists amenities text[];
 
 -- ── per-person prices: who gets the best deal & books ───────────────
 -- Each member records the real price THEY see for an accommodation (Genius
