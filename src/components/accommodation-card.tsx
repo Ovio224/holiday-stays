@@ -59,7 +59,7 @@ export function AccommodationCard({
     : null;
 
   const title = accommodation.title?.trim() || "Untitled stay";
-  const rating = formatRating(details?.rating ?? null);
+  const rating = formatRating(details?.rating ?? null, details?.ratingScale ?? null);
   const reviews = details?.reviews ?? null;
   const chips = detailChips(details);
 

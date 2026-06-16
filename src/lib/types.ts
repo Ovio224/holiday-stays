@@ -67,7 +67,8 @@ export interface AccommodationPrice {
 
 /** Structured details parsed from a listing (rating + capacity). */
 export interface ListingDetails {
-  rating: number | null; // e.g. 4.82
+  rating: number | null; // e.g. 4.82 (Airbnb /5) or 9.5 (Booking /10)
+  ratingScale: number | null; // the rating's max, from JSON-LD bestRating (5, 10…); null = default /5
   reviews: number | null; // review count
   bedrooms: number | null;
   beds: number | null;

@@ -246,11 +246,11 @@ function priceFromOffers(merged: LdObject): {
 }
 
 /**
- * Derive a human title from the URL when the page itself can't be read (e.g.
- * Booking.com blocks server fetches with an anti-bot challenge). Booking encodes
- * the hotel name in the slug: /hotel/id/padma-resort-ubud.html -> "Padma Resort
- * Ubud". Falls back to the last path segment for other sites, and returns null
- * for opaque numeric ids (e.g. Airbnb /rooms/12345).
+ * Derive a human title from the URL as a fallback when the page itself can't be
+ * read (a fetch that times out, errors, or — rarely now — is still blocked).
+ * Booking encodes the hotel name in the slug: /hotel/id/padma-resort-ubud.html
+ * -> "Padma Resort Ubud". Falls back to the last path segment for other sites,
+ * and returns null for opaque numeric ids (e.g. Airbnb /rooms/12345).
  */
 function titleFromUrl(url: string): string | null {
   let host = "";
@@ -304,6 +304,7 @@ function titleFromUrl(url: string): string | null {
 export function parseListing(html: string, url: string): ParsedListing {
   const emptyDetails: ListingDetails = {
     rating: null,
+    ratingScale: null,
     reviews: null,
     bedrooms: null,
     beds: null,
@@ -351,6 +352,10 @@ export function parseListing(html: string, url: string): ParsedListing {
   const rating =
     toNumber(aggregate?.["ratingValue"]) ??
     (ogTitle ? matchNumber(ogTitle, /★\s*([0-9.]+)/) : null);
+  // The rating's scale, from JSON-LD aggregateRating.bestRating. Booking sends
+  // 10 (scores are /10); Airbnb omits it (it's /5, our default). Only meaningful
+  // alongside an actual rating.
+  const ratingScale = rating != null ? toNumber(aggregate?.["bestRating"]) : null;
   const reviews =
     toNumber(aggregate?.["ratingCount"]) ??
     toNumber(aggregate?.["reviewCount"]);
@@ -386,6 +391,7 @@ export function parseListing(html: string, url: string): ParsedListing {
     currency,
     details: {
       rating,
+      ratingScale,
       reviews,
       bedrooms,
       beds,

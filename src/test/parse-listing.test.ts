@@ -175,6 +175,56 @@ describe("parseListing", () => {
     });
   });
 
+  describe("rating scale (bestRating)", () => {
+    // Booking's real JSON-LD: a Hotel with aggregateRating on a /10 scale and
+    // NO offers (nightly price is date-dependent, so it isn't in static HTML).
+    const BOOKING_REAL = `
+      <meta property="og:title" content="Padma Resort Ubud, Payangan, Indonesia" />
+      <meta property="og:image" content="https://r-xx.bstatic.com/xdata/images/hotel/608x352/799975956.webp" />
+      <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "Hotel",
+          "name": "Padma Resort Ubud",
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": 9.5,
+            "bestRating": 10,
+            "reviewCount": 554
+          }
+        }
+      </script>
+    `;
+    const booking = parseListing(
+      BOOKING_REAL,
+      "https://www.booking.com/hotel/id/padma-resort-ubud.html",
+    );
+
+    it("reads bestRating into details.ratingScale (Booking is /10)", () => {
+      expect(booking.details.rating).toBe(9.5);
+      expect(booking.details.ratingScale).toBe(10);
+      expect(booking.details.reviews).toBe(554);
+    });
+
+    it("still extracts the title and image from the real Booking structure", () => {
+      expect(booking.title).toBe("Padma Resort Ubud");
+      expect(booking.imageUrl).toBe(
+        "https://r-xx.bstatic.com/xdata/images/hotel/608x352/799975956.webp",
+      );
+    });
+
+    it("leaves price null when Booking has no JSON-LD offers (date-dependent)", () => {
+      expect(booking.pricePerNight).toBeNull();
+      expect(booking.currency).toBeNull();
+    });
+
+    it("leaves ratingScale null when bestRating is absent (Airbnb /5)", () => {
+      const result = parseListing(AIRBNB_HTML, "https://www.airbnb.com/rooms/1");
+      expect(result.details.rating).toBe(4.82);
+      expect(result.details.ratingScale).toBeNull();
+    });
+  });
+
   describe("og:title summary stripping + rating fallback", () => {
     // When there's no JSON-LD name, fall back to a cleaned og:title and parse
     // the rating out of the ★ marker.
@@ -260,6 +310,7 @@ describe("parseListing", () => {
       currency: null,
       details: {
         rating: null,
+        ratingScale: null,
         reviews: null,
         bedrooms: null,
         beds: null,
@@ -294,7 +345,7 @@ describe("parseListing", () => {
         ].sort(),
       );
       expect(Object.keys(result.details).sort()).toEqual(
-        ["bedrooms", "beds", "baths", "guests", "rating", "reviews"].sort(),
+        ["bedrooms", "beds", "baths", "guests", "rating", "ratingScale", "reviews"].sort(),
       );
     });
   });

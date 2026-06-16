@@ -164,8 +164,10 @@ export function SubmitSheet({
               className="h-14 rounded-lg px-4 text-base"
             />
             {/booking\.com/i.test(url) ? (
-              <p className="text-xs text-muted-foreground">
-                Booking.com blocks auto-fill — please add the name and price below.
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <SparklesIcon className="size-3.5 text-muted-foreground" />
+                We&rsquo;ll auto-fill the name, rating and details. Booking prices
+                vary by date, so add the nightly price yourself.
               </p>
             ) : (
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">

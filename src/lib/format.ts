@@ -136,10 +136,20 @@ export function sourceLabel(source: AccommodationSource): string {
   }
 }
 
-/** "4.82" (two decimals) or null when there's no rating. */
-export function formatRating(rating: number | null): string | null {
+/**
+ * Format a rating for the star pill: "4.82" (Airbnb /5) or "9.5/10" (Booking).
+ * The star icon implies a /5 scale, so we annotate any other scale with a "/N"
+ * suffix; a 5 or unknown (null) scale shows the bare number. Trailing zeros are
+ * trimmed ("9.50" -> "9.5", "9.00" -> "9"). Returns null when there's no rating.
+ */
+export function formatRating(
+  rating: number | null,
+  scale?: number | null,
+): string | null {
   if (rating == null || Number.isNaN(rating)) return null;
-  return rating.toFixed(2);
+  // Round to 2 decimals, then drop trailing zeros via Number's own toString.
+  const value = Number(rating.toFixed(2)).toString();
+  return scale != null && scale !== 5 ? `${value}/${scale}` : value;
 }
 
 /**

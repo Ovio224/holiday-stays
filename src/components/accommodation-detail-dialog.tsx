@@ -136,7 +136,7 @@ function ReadView({
   onEdit: () => void;
 }) {
   const { details } = accommodation;
-  const rating = formatRating(details?.rating ?? null);
+  const rating = formatRating(details?.rating ?? null, details?.ratingScale ?? null);
   const reviews = details?.reviews ?? null;
   const chips = detailChips(details);
 

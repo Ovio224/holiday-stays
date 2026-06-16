@@ -69,6 +69,7 @@ export async function submitAccommodation(input: {
     currency: null,
     details: {
       rating: null,
+      ratingScale: null,
       reviews: null,
       bedrooms: null,
       beds: null,
