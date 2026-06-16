@@ -164,3 +164,73 @@ export function parsePriceAmount(text: string | null): number | null {
   const match = text.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : null;
 }
+
+export interface TripBudget {
+  /** Sum across legs of the *leading* pick's cost (most net yes votes). */
+  leadingTotal: number | null;
+  /** Sum across legs of the cheapest priced option. */
+  cheapestTotal: number | null;
+  currency: string;
+  pricedLegs: number; // legs that contributed a price
+  totalLegs: number;
+}
+
+interface BudgetLeg {
+  nights: number | null;
+  accommodations: {
+    price_per_night: number | null;
+    currency: string | null;
+    votes: { value: boolean }[];
+  }[];
+}
+
+/**
+ * Estimate the whole-trip cost from each leg's candidates. For every leg with at
+ * least one priced option (and a known night count) we take both the cheapest
+ * option and the "leading" pick (highest net yes-votes, ties broken by price),
+ * each costed as price/night × the leg's nights, and sum them across legs.
+ * Currencies are assumed uniform (the first priced leg's currency is used; no
+ * conversion is performed).
+ */
+export function tripBudget(legs: BudgetLeg[]): TripBudget {
+  let leadingTotal = 0;
+  let cheapestTotal = 0;
+  let pricedLegs = 0;
+  let currency = "$";
+  let currencySet = false;
+
+  for (const leg of legs) {
+    const nightCount = leg.nights ?? 0;
+    if (nightCount <= 0) continue;
+
+    const priced = leg.accommodations.filter((a) => a.price_per_night != null);
+    if (priced.length === 0) continue;
+
+    if (!currencySet) {
+      currency = priced[0].currency || "$";
+      currencySet = true;
+    }
+
+    const costed = priced.map((a) => ({
+      cost: (a.price_per_night as number) * nightCount,
+      net: a.votes.reduce((s, v) => s + (v.value ? 1 : -1), 0),
+    }));
+
+    const cheapest = Math.min(...costed.map((c) => c.cost));
+    const leading = costed.reduce((best, c) =>
+      c.net > best.net || (c.net === best.net && c.cost < best.cost) ? c : best,
+    );
+
+    cheapestTotal += cheapest;
+    leadingTotal += leading.cost;
+    pricedLegs += 1;
+  }
+
+  return {
+    leadingTotal: pricedLegs > 0 ? Math.round(leadingTotal * 100) / 100 : null,
+    cheapestTotal: pricedLegs > 0 ? Math.round(cheapestTotal * 100) / 100 : null,
+    currency,
+    pricedLegs,
+    totalLegs: legs.length,
+  };
+}

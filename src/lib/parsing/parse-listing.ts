@@ -246,10 +246,62 @@ function priceFromOffers(merged: LdObject): {
 }
 
 /**
- * Parse raw page HTML into a ParsedListing. Always returns a complete object,
- * including a `details` object with all six keys (null when not found).
+ * Derive a human title from the URL when the page itself can't be read (e.g.
+ * Booking.com blocks server fetches with an anti-bot challenge). Booking encodes
+ * the hotel name in the slug: /hotel/id/padma-resort-ubud.html -> "Padma Resort
+ * Ubud". Falls back to the last path segment for other sites, and returns null
+ * for opaque numeric ids (e.g. Airbnb /rooms/12345).
  */
-export function parseListing(html: string, _url: string): ParsedListing {
+function titleFromUrl(url: string): string | null {
+  let host = "";
+  let path = "";
+  try {
+    const u = new URL(url);
+    host = u.hostname;
+    path = u.pathname;
+  } catch {
+    return null;
+  }
+
+  let slug: string | null = null;
+  if (/(^|\.)booking\.com$/i.test(host)) {
+    // Only the canonical hotel path carries a readable name. Share links
+    // (/Share-XXXX) and search URLs are opaque, so we don't guess from them.
+    const m = path.match(/\/hotel\/[^/]+\/([^/.]+)/i);
+    slug = m ? m[1] : null;
+  } else {
+    const segs = path.split("/").filter(Boolean);
+    const last = segs[segs.length - 1];
+    if (last) slug = last.replace(/\.[a-z0-9]+$/i, "");
+  }
+  if (!slug) return null;
+  if (/^\d+$/.test(slug)) return null; // opaque numeric ids
+  if (/^share[-_]/i.test(slug)) return null; // share ids
+
+  const words = slug
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return null;
+  // A single mixed-case alphanumeric token is almost certainly an id, not a name.
+  if (
+    words.length === 1 &&
+    /[a-z]/i.test(words[0]) &&
+    /\d/.test(words[0]) &&
+    words[0].length <= 14
+  ) {
+    return null;
+  }
+  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+/**
+ * Parse raw page HTML into a ParsedListing. Always returns a complete object,
+ * including a `details` object with all six keys (null when not found). When the
+ * page yields no title (blocked/empty), a URL-derived title is used as fallback.
+ */
+export function parseListing(html: string, url: string): ParsedListing {
   const emptyDetails: ListingDetails = {
     rating: null,
     reviews: null,
@@ -261,7 +313,7 @@ export function parseListing(html: string, _url: string): ParsedListing {
 
   if (typeof html !== "string" || html.length === 0) {
     return {
-      title: null,
+      title: titleFromUrl(url),
       imageUrl: null,
       description: null,
       priceText: null,
@@ -285,7 +337,8 @@ export function parseListing(html: string, _url: string): ParsedListing {
   const title =
     ldName ||
     ogDescription ||
-    (ogTitle ? clean(stripTitleSummary(ogTitle)) : null);
+    (ogTitle ? clean(stripTitleSummary(ogTitle)) : null) ||
+    titleFromUrl(url);
 
   // --- description ---------------------------------------------------------
   const ldDescription =

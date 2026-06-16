@@ -5,9 +5,10 @@
 // as a StaySection, and owns the "add a place" bottom-sheet.
 
 import * as React from "react";
-import { CalendarDays, PlusIcon } from "lucide-react";
+import { CalendarDays, PlusIcon, Wallet } from "lucide-react";
 
 import type { Stay, AccommodationWithVotes, Member } from "@/lib/types";
+import { formatMoney, nights, tripBudget } from "@/lib/format";
 import { useRealtimeBoard } from "@/hooks/use-realtime-board";
 import { StaySection } from "@/components/stay-section";
 import { SubmitSheet } from "@/components/submit-sheet";
@@ -74,6 +75,18 @@ export function TripBoard({
     return map;
   }, [accommodations]);
 
+  // Whole-trip budget estimate from the priced candidates in each leg.
+  const budget = React.useMemo(
+    () =>
+      tripBudget(
+        sortedStays.map((stay) => ({
+          nights: nights(stay.start_date, stay.end_date),
+          accommodations: byStay.get(stay.id) ?? [],
+        })),
+      ),
+    [sortedStays, byStay],
+  );
+
   return (
     <div className="relative">
       <header className="mx-auto mb-8 w-full max-w-2xl px-4 sm:px-6">
@@ -94,6 +107,27 @@ export function TripBoard({
             <CalendarDays className="size-4 text-muted-foreground" aria-hidden />
             {tripRange}
           </p>
+        )}
+
+        {budget.leadingTotal != null && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            <span className="text-muted-foreground">Estimated trip total</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1 font-semibold text-white">
+              <Wallet className="size-3.5" aria-hidden />
+              {formatMoney(budget.leadingTotal, budget.currency)}
+            </span>
+            {budget.cheapestTotal != null &&
+              budget.cheapestTotal < budget.leadingTotal && (
+                <span className="text-muted-foreground">
+                  · from {formatMoney(budget.cheapestTotal, budget.currency)}
+                </span>
+              )}
+            {budget.pricedLegs < budget.totalLegs && (
+              <span className="text-muted-foreground">
+                · {budget.pricedLegs}/{budget.totalLegs} legs priced
+              </span>
+            )}
+          </div>
         )}
       </header>
 

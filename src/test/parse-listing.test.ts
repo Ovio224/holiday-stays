@@ -1,6 +1,49 @@
 import { describe, it, expect } from "vitest";
 import { parseListing } from "@/lib/parsing/parse-listing";
 
+describe("parseListing > URL title fallback (blocked/empty pages)", () => {
+  it("derives a Booking.com hotel name from the URL slug when the page is empty", () => {
+    const result = parseListing(
+      "",
+      "https://www.booking.com/hotel/id/padma-resort-ubud.html",
+    );
+    expect(result.title).toBe("Padma Resort Ubud");
+    expect(result.details.rating).toBeNull();
+  });
+
+  it("uses the URL slug when a challenge page carries no metadata", () => {
+    const challenge = "<html><head><title></title></head><body></body></html>";
+    const result = parseListing(
+      challenge,
+      "https://www.booking.com/hotel/fr/le-petit-jardin.html",
+    );
+    expect(result.title).toBe("Le Petit Jardin");
+  });
+
+  it("returns null title for opaque numeric ids (e.g. Airbnb rooms)", () => {
+    const result = parseListing("", "https://www.airbnb.com/rooms/12345678");
+    expect(result.title).toBeNull();
+  });
+
+  it("returns null for Booking share links / non-hotel paths", () => {
+    expect(
+      parseListing("", "https://www.booking.com/Share-CKsPv8").title,
+    ).toBeNull();
+    expect(
+      parseListing("", "https://www.booking.com/searchresults.html").title,
+    ).toBeNull();
+  });
+
+  it("prefers real page data over the URL slug when both exist", () => {
+    const html = `<meta property="og:title" content="Real Page Name" />`;
+    const result = parseListing(
+      html,
+      "https://www.booking.com/hotel/id/some-slug.html",
+    );
+    expect(result.title).toBe("Real Page Name");
+  });
+});
+
 // A realistic Booking.com-style page: og: meta tags + a JSON-LD price block.
 const BOOKING_HTML = `
 <!DOCTYPE html>

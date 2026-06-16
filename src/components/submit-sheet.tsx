@@ -163,10 +163,16 @@ export function SubmitSheet({
               onChange={(e) => setUrl(e.target.value)}
               className="h-14 rounded-lg px-4 text-base"
             />
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <SparklesIcon className="size-3.5 text-muted-foreground" />
-              We will auto-fill the name, rating and room details from the link.
-            </p>
+            {/booking\.com/i.test(url) ? (
+              <p className="text-xs text-muted-foreground">
+                Booking.com blocks auto-fill — please add the name and price below.
+              </p>
+            ) : (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <SparklesIcon className="size-3.5 text-muted-foreground" />
+                We will auto-fill the name, rating and room details from the link.
+              </p>
+            )}
           </div>
 
           {/* Which stay this belongs to */}
