@@ -16,10 +16,10 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Expand, ExternalLink, ImageOff, MapPin, Pencil, Star } from "lucide-react";
+import { Expand, ExternalLink, ImageOff, MapPin, Pencil, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { updateAccommodation } from "@/actions/accommodations";
+import { deleteAccommodation, updateAccommodation } from "@/actions/accommodations";
 import { CommentThread } from "@/components/comment-thread";
 import {
   mapEmbedUrl,
@@ -70,11 +70,31 @@ export function AccommodationDetailDialog({
 }: AccommodationDetailDialogProps) {
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
+  const [isDeleting, startDeleteTransition] = React.useTransition();
 
   // Reset to the read view whenever the dialog closes so a reopen starts clean.
   function handleOpenChange(next: boolean) {
     if (!next) setEditing(false);
     setOpen(next);
+  }
+
+  // Delete the whole listing (cascades to its votes, prices, and comments). On
+  // success we close the dialog; the realtime `accommodations` DELETE event drops
+  // the card from the board for everyone.
+  function handleDelete() {
+    startDeleteTransition(async () => {
+      try {
+        await deleteAccommodation(accommodation.id);
+        toast.success("Listing deleted");
+        setOpen(false);
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Couldn't delete that listing — try again",
+        );
+      }
+    });
   }
 
   const title = accommodation.title?.trim() || "Untitled stay";
@@ -112,6 +132,8 @@ export function AccommodationDetailDialog({
             stayNights={stayNights}
             title={title}
             onEdit={() => setEditing(true)}
+            onDelete={handleDelete}
+            deleting={isDeleting}
           />
         )}
       </DialogContent>
@@ -129,6 +151,8 @@ function ReadView({
   stayNights,
   title,
   onEdit,
+  onDelete,
+  deleting,
 }: {
   accommodation: AccommodationWithVotes;
   members: Member[];
@@ -138,8 +162,13 @@ function ReadView({
   stayNights: number | null;
   title: string;
   onEdit: () => void;
+  onDelete: () => void;
+  deleting: boolean;
 }) {
   const { details } = accommodation;
+  // Two-step delete: the first click arms an inline confirmation so a destructive,
+  // everyone-affecting removal is never a single mis-tap.
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const rating = formatRating(details?.rating ?? null, details?.ratingScale ?? null);
   const reviews = details?.reviews ?? null;
   const chips = detailChips(details);
@@ -329,12 +358,52 @@ function ReadView({
         variant="dialog"
       />
 
-      <DialogFooter>
-        <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
-        <Button type="button" onClick={onEdit}>
-          <Pencil className="size-4" aria-hidden />
-          Edit
-        </Button>
+      <DialogFooter className="sm:items-center sm:justify-between">
+        {confirmingDelete ? (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <span className="text-sm text-muted-foreground">
+              Delete this listing for everyone?
+            </span>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                className="bg-destructive text-white hover:bg-destructive/90"
+                onClick={onDelete}
+                disabled={deleting}
+              >
+                <Trash2 className="size-4" aria-hidden />
+                {deleting ? "Deleting…" : "Delete listing"}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => setConfirmingDelete(true)}
+            >
+              <Trash2 className="size-4" aria-hidden />
+              Delete
+            </Button>
+            <div className="flex gap-2">
+              <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
+              <Button type="button" onClick={onEdit}>
+                <Pencil className="size-4" aria-hidden />
+                Edit
+              </Button>
+            </div>
+          </>
+        )}
       </DialogFooter>
     </>
   );
