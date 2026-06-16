@@ -85,16 +85,56 @@ Security model: RLS is on for every table. The four content tables
 shared board streams over Realtime) and **no** anon writes. `gate_attempts` is
 server-only. The gate cookie is the real access boundary.
 
-## Deploying
+## Deploying (Supabase cloud + Vercel)
 
-1. **Supabase (cloud):** create a project, then
-   `npx supabase link --project-ref <ref>` and `npx supabase db push` to apply
-   the migrations. Run the seed once if you want sample data.
-2. **Vercel:** import the repo and set the env vars from `.env.example`
-   (`GATE_CODE`, `SESSION_SECRET`, and the three `*_SUPABASE_*` values from your
-   cloud project). Deploy.
+### 1. Supabase project
 
-Cookies are marked `secure` automatically in production (`NODE_ENV=production`).
+1. Create a project at <https://supabase.com/dashboard> (free tier). Note the
+   **project ref** and the **database password** you set.
+2. Link this repo and push the schema (you're already logged into the CLI):
+   ```bash
+   npx supabase link --project-ref <your-ref>
+   npx supabase db push        # applies both migrations: tables, RLS, grants,
+                               # realtime publication, and the details columns
+   ```
+3. Seed your trip legs. `db push` does **not** run `seed.sql` (that's local-only).
+   Edit `supabase/seed.sql` with your real legs, then paste it into the project's
+   **SQL Editor** and run it — or add legs directly in the dashboard. The app
+   needs at least the `stays` rows to render.
+4. Grab the keys from **Project Settings → API**: the **Project URL**, the
+   **anon/public** key, and the **service_role** key.
+
+### 2. Vercel
+
+1. Install the CLI and deploy from the repo root:
+   ```bash
+   npm i -g vercel
+   vercel            # first run logs in (browser) + links/creates the project
+   ```
+2. Set the production environment variables (CLI or the dashboard → Settings →
+   Environment Variables):
+
+   | Variable | Value |
+   | --- | --- |
+   | `GATE_CODE` | your shared entry code |
+   | `SESSION_SECRET` | a long random string (e.g. `openssl rand -hex 32`) |
+   | `NEXT_PUBLIC_SUPABASE_URL` | `https://<your-ref>.supabase.co` |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon/public key |
+   | `SUPABASE_SERVICE_ROLE_KEY` | service_role key (server-only) |
+   | `GATE_MAX_ATTEMPTS` / `GATE_WINDOW_MINUTES` | optional (default 5 / 15) |
+
+   ```bash
+   vercel env add GATE_CODE production        # repeat per variable
+   ```
+3. Ship it: `vercel --prod`. Open the URL, enter your gate code, pick a name, and
+   share the link + code with the crew.
+
+**Good to know**
+- Cookies are `secure` in production automatically (`NODE_ENV=production` → HTTPS).
+- Realtime works on cloud out of the box (the migration adds the tables to the
+  `supabase_realtime` publication).
+- `next/image` is configured to allow any `https` host, so Airbnb/Booking photos
+  render without extra setup.
 
 ## Notes
 
