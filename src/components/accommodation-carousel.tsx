@@ -58,6 +58,21 @@ export function AccommodationCarousel({
     [accommodations],
   );
 
+  // The best-located option in this leg (highest location score) earns a single
+  // "Top location" badge — the comparative trust signal leading products show.
+  const bestLocatedId = React.useMemo(() => {
+    let bestId: string | null = null;
+    let best = -Infinity;
+    for (const acc of accommodations) {
+      const loc = scores.get(acc.id)?.location;
+      if (loc != null && loc > best) {
+        best = loc;
+        bestId = acc.id;
+      }
+    }
+    return bestId;
+  }, [accommodations, scores]);
+
   const [active, setActive] = React.useState(0);
   const [atStart, setAtStart] = React.useState(true);
   const [atEnd, setAtEnd] = React.useState(count <= 1);
@@ -164,6 +179,7 @@ export function AccommodationCarousel({
               locationScoringEnabled={locationScoringEnabled}
               isFrontRunner={accommodation.id === frontRunnerId}
               isCheapestInLeg={accommodation.id === cheapestId}
+              isBestLocated={accommodation.id === bestLocatedId}
               priority={i === 0}
             />
           </div>

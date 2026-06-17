@@ -13,7 +13,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Bike, Crown, ImageOff, MapPin, Star, Tag, Users } from "lucide-react";
+import { Crown, ImageOff, Star, Tag, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { AccommodationDetailDialog } from "@/components/accommodation-detail-dialog";
@@ -29,6 +29,7 @@ import {
   sourceLabel,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { LocationScoreChip } from "@/components/location-score";
 import type { ScoreResult } from "@/lib/location-score";
 import type { AccommodationWithVotes, Member, Place } from "@/lib/types";
 
@@ -49,6 +50,8 @@ interface AccommodationCardProps {
   isFrontRunner?: boolean;
   /** The single lowest effective nightly price in this leg — earns a price badge. */
   isCheapestInLeg?: boolean;
+  /** The best-located option in this leg — earns the "Top location" badge. */
+  isBestLocated?: boolean;
   /** First visible card → eager-load its cover so it can be the LCP element. */
   priority?: boolean;
 }
@@ -65,6 +68,7 @@ export function AccommodationCard({
   locationScoringEnabled,
   isFrontRunner = false,
   isCheapestInLeg = false,
+  isBestLocated = false,
   priority = false,
 }: AccommodationCardProps) {
   const { votes, prices, comments, details } = accommodation;
@@ -224,8 +228,8 @@ export function AccommodationCard({
                 stayLabel={stayLabel}
                 stayNights={stayNights}
                 places={places}
-                score={score}
                 locationScoringEnabled={locationScoringEnabled}
+                isBestLocated={isBestLocated}
               />
             </div>
           </div>
@@ -261,7 +265,7 @@ export function AccommodationCard({
 
             {/* Location score — how close this stay is to the leg's places-to-visit. */}
             {locationScoringEnabled && places.length > 0 && score && (
-              <LocationBadge score={score} />
+              <LocationScoreChip score={score} isBestLocated={isBestLocated} />
             )}
 
             {accommodation.notes?.trim() && (
@@ -311,36 +315,3 @@ export function AccommodationCard({
   );
 }
 
-/**
- * The location score badge: the 0–100 score + a plain-language coverage line, or a
- * "Needs address" chip when the stay isn't geocoded (so it can't be ranked by
- * distance and is grouped separately rather than shown a fake low score).
- */
-function LocationBadge({ score }: { score: ScoreResult }) {
-  if (score.status === "needs-address") {
-    return (
-      <div className="flex w-fit items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-        <MapPin className="size-3.5" aria-hidden />
-        Needs address — add a location to rank by distance
-      </div>
-    );
-  }
-
-  if (score.location == null) return null;
-  const coverage = score.coverageCount;
-
-  return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1 text-sm font-semibold text-white">
-        <MapPin className="size-3.5" aria-hidden />
-        {Math.round(score.location)}
-      </span>
-      {coverage && (
-        <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
-          {coverage.within}/{coverage.of} spots within 15 min
-          <Bike className="size-3.5" aria-hidden />
-        </span>
-      )}
-    </div>
-  );
-}

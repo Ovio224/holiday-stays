@@ -10,14 +10,18 @@ import {
   compareByLocation,
   distanceToTime,
   effectivePoi,
+  formatDistanceKm,
+  formatMinutes,
   haversineKm,
   interpolate,
+  locationScoreForMode,
   median,
   PERSONAS,
   priceSubScore,
   ratingSubScore,
   scoreAccommodation,
   scoreLegAccommodations,
+  scoreTier,
   timeToSubScore,
   votesSubScore,
   type PoiTime,
@@ -346,6 +350,67 @@ describe("effectivePoi — persona transforms (never mutate stored data)", () =>
   it("keeps a user's explicit closer_is_better=false regardless of persona", () => {
     const r = effectivePoi({ category: "beach", importance: 2, closer_is_better: false }, PERSONAS.beach);
     expect(r.closerIsBetter).toBe(false);
+  });
+});
+
+describe("scoreTier — named bands (Walk Score pattern)", () => {
+  it("maps each band to its tier at the boundaries", () => {
+    expect(scoreTier(100).key).toBe("prime");
+    expect(scoreTier(85).key).toBe("prime");
+    expect(scoreTier(84).key).toBe("excellent");
+    expect(scoreTier(70).key).toBe("excellent");
+    expect(scoreTier(69).key).toBe("good");
+    expect(scoreTier(55).key).toBe("good");
+    expect(scoreTier(54).key).toBe("fair");
+    expect(scoreTier(35).key).toBe("fair");
+    expect(scoreTier(34).key).toBe("remote");
+    expect(scoreTier(0).key).toBe("remote");
+  });
+  it("clamps out-of-range scores", () => {
+    expect(scoreTier(150).key).toBe("prime");
+    expect(scoreTier(-10).key).toBe("remote");
+  });
+  it("always carries a label, descriptor, and colour", () => {
+    const t = scoreTier(82);
+    expect(t.label).toBe("Excellent base");
+    expect(t.descriptor.length).toBeGreaterThan(0);
+    expect(t.color).toBe("green");
+  });
+});
+
+describe("formatDistanceKm / formatMinutes", () => {
+  it("shows metres under a km and km above", () => {
+    expect(formatDistanceKm(0.4)).toBe("400 m");
+    expect(formatDistanceKm(0.05)).toBe("50 m");
+    expect(formatDistanceKm(2.4)).toBe("2.4 km");
+    expect(formatDistanceKm(12)).toBe("12.0 km");
+    expect(formatDistanceKm(null)).toBeNull();
+  });
+  it("formats minutes, sub-minute, and hours", () => {
+    expect(formatMinutes(0.4)).toBe("<1 min");
+    expect(formatMinutes(6.4)).toBe("6 min");
+    expect(formatMinutes(75)).toBe("1 h 15 min");
+    expect(formatMinutes(120)).toBe("2 h");
+    expect(formatMinutes(null)).toBeNull();
+  });
+});
+
+describe("locationScoreForMode — single accommodation, per mode", () => {
+  const origin = { latitude: -8.5069, longitude: 115.2625 };
+  const near = place({ id: "poi", latitude: -8.5079, longitude: 115.2635, importance: 2 });
+
+  it("scores higher and faster by scooter than on foot for the same spot", () => {
+    const foot = locationScoreForMode({ origin, places: [near], mode: "foot" });
+    const scooter = locationScoreForMode({ origin, places: [near], mode: "scooter" });
+    expect(foot.poi[0].minutes as number).toBeGreaterThan(scooter.poi[0].minutes as number);
+    expect(scooter.location).not.toBeNull();
+    expect(foot.location).not.toBeNull();
+  });
+
+  it("returns null location (not 0) when the accommodation has no origin", () => {
+    const r = locationScoreForMode({ origin: null, places: [near], mode: "scooter" });
+    expect(r.location).toBeNull();
+    expect(r.poi[0].minutes).toBeNull();
   });
 });
 

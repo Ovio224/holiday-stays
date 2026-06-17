@@ -587,3 +587,110 @@ export function compareByLocation(
   if (bc !== ac) return bc - ac;
   return a.created_at.localeCompare(b.created_at);
 }
+
+// ── Named tiers (the Walk Score pattern) ─────────────────────────────────────
+// A raw 0–100 number is not trustworthy on its own — leading products (Walk Score,
+// Booking) always pair it with a NAMED TIER + a plain-language descriptor, and
+// never encode meaning by colour alone. We map the score to five bands with warm,
+// honest labels and a semantic colour family (green → red) the UI turns into
+// classes. (Adapted from Walk Score's 5-band/4-name "Walker's Paradise…
+// Car-Dependent" scale — destination-based, exactly like ours.)
+
+export type TierColor = "emerald" | "green" | "amber" | "orange" | "rose";
+
+export interface LocationTier {
+  key: "prime" | "excellent" | "good" | "fair" | "remote";
+  /** Inclusive lower bound of the band. */
+  min: number;
+  label: string;
+  descriptor: string;
+  color: TierColor;
+}
+
+export const SCORE_TIERS: readonly LocationTier[] = [
+  { key: "prime", min: 85, label: "Perfectly placed", descriptor: "Most of your spots are a quick hop away", color: "emerald" },
+  { key: "excellent", min: 70, label: "Excellent base", descriptor: "Well placed for your plans", color: "green" },
+  { key: "good", min: 55, label: "Well located", descriptor: "A solid base for getting around", color: "amber" },
+  { key: "fair", min: 35, label: "A bit out", descriptor: "Some of your spots are a trek", color: "orange" },
+  { key: "remote", min: 0, label: "Off the beaten path", descriptor: "Most of your spots are far", color: "rose" },
+];
+
+/** Map a 0–100 location score to its named tier (band, label, descriptor, colour). */
+export function scoreTier(score: number): LocationTier {
+  const s = clamp(score, 0, 100);
+  return SCORE_TIERS.find((t) => s >= t.min) ?? SCORE_TIERS[SCORE_TIERS.length - 1];
+}
+
+// ── Presentational formatters (pure, so they're testable) ────────────────────
+
+/** "400 m" under a km, "2.1 km" above — the metres-then-km convention Booking uses. */
+export function formatDistanceKm(km: number | null): string | null {
+  if (km == null || !Number.isFinite(km)) return null;
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  return `${km.toFixed(1)} km`;
+}
+
+/** "<1 min", "6 min", "1 h 15 min". */
+export function formatMinutes(minutes: number | null): string | null {
+  if (minutes == null || !Number.isFinite(minutes)) return null;
+  const m = Math.round(minutes);
+  if (m < 1) return "<1 min";
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const rest = m % 60;
+  return rest ? `${h} h ${rest} min` : `${h} h`;
+}
+
+// ── Single-accommodation, per-mode score (the detail panel's mode toggle) ────
+
+export interface LocationModeScore {
+  location: number | null;
+  coveragePct: number | null;
+  coverageCount: { within: number; of: number } | null;
+  poi: PoiDistance[];
+}
+
+/**
+ * Score ONE accommodation's location for a given travel mode, with the per-POI
+ * breakdown — what the detail-dialog mode toggle (Walk / Scooter / Car) recomputes
+ * on the fly. Pure + haversine-based, so all three modes are free (no routing key);
+ * it reuses the exact scoring path as the leg scorer, so the default-mode number
+ * matches the card's badge.
+ */
+export function locationScoreForMode(args: {
+  origin: LatLng | null;
+  places: Place[];
+  mode: TravelMode;
+  persona?: PersonaKey | null;
+}): LocationModeScore {
+  const { origin, places, mode } = args;
+  const persona = PERSONAS[args.persona ?? "balanced"] ?? PERSONAS.balanced;
+
+  const poi = poiDistances(origin, places, mode);
+  const poiTimes: PoiTime[] = places.map((place, i) => {
+    const weight = effectivePoi(place, persona);
+    return {
+      minutes: poi[i].minutes,
+      importance: weight.importance,
+      closerIsBetter: weight.closerIsBetter,
+    };
+  });
+
+  const result = scoreAccommodation({
+    poiTimes,
+    accommodationHasCoords: origin != null,
+    effectiveNightly: null,
+    legMedianNightly: null,
+    rating: null,
+    votes: [],
+    mode,
+    weights: DEFAULT_WEIGHTS,
+  });
+
+  return {
+    location: result.location,
+    coveragePct: result.coveragePct,
+    coverageCount: result.coverageCount,
+    poi,
+  };
+}
