@@ -8,6 +8,14 @@
         "/Users/ovidiucotorogea/WebstormProjects/accomodation-comparison/.claude/dev.sh"
       ],
       "port": 3100
+    },
+    {
+      "name": "bali-local",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "/Users/ovidiucotorogea/WebstormProjects/accomodation-comparison/.claude/dev-local.sh"
+      ],
+      "port": 3200
     }
   ]
 }

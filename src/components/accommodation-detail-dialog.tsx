@@ -34,7 +34,8 @@ import {
   nightlyTotal,
   sourceLabel,
 } from "@/lib/format";
-import type { AccommodationWithVotes, Member } from "@/lib/types";
+import { LocationScorePanel } from "@/components/location-score";
+import type { AccommodationWithVotes, Member, Place } from "@/lib/types";
 import {
   Dialog,
   DialogClose,
@@ -58,6 +59,9 @@ interface AccommodationDetailDialogProps {
   stayArea: string | null;
   stayLabel: string;
   stayNights: number | null;
+  places: Place[];
+  isBestLocated?: boolean;
+  locationScoringEnabled: boolean;
 }
 
 export function AccommodationDetailDialog({
@@ -67,6 +71,9 @@ export function AccommodationDetailDialog({
   stayArea,
   stayLabel,
   stayNights,
+  places,
+  isBestLocated = false,
+  locationScoringEnabled,
 }: AccommodationDetailDialogProps) {
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
@@ -130,6 +137,9 @@ export function AccommodationDetailDialog({
             stayArea={stayArea}
             stayLabel={stayLabel}
             stayNights={stayNights}
+            places={places}
+            isBestLocated={isBestLocated}
+            locationScoringEnabled={locationScoringEnabled}
             title={title}
             onEdit={() => setEditing(true)}
             onDelete={handleDelete}
@@ -149,6 +159,9 @@ function ReadView({
   stayArea,
   stayLabel,
   stayNights,
+  places,
+  isBestLocated,
+  locationScoringEnabled,
   title,
   onEdit,
   onDelete,
@@ -160,6 +173,9 @@ function ReadView({
   stayArea: string | null;
   stayLabel: string;
   stayNights: number | null;
+  places: Place[];
+  isBestLocated: boolean;
+  locationScoringEnabled: boolean;
   title: string;
   onEdit: () => void;
   onDelete: () => void;
@@ -263,6 +279,15 @@ function ReadView({
           </div>
         )}
       </div>
+
+      {/* Distances to this leg's places-to-visit (location scoring only). */}
+      {locationScoringEnabled && places.length > 0 && (
+        <LocationScorePanel
+          accommodation={accommodation}
+          places={places}
+          isBestLocated={isBestLocated}
+        />
+      )}
 
       {/* Info */}
       <div className="flex flex-col gap-3 text-sm">

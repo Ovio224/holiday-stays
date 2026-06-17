@@ -10,6 +10,8 @@ import {
   priceComparison,
   cheapestMemberAmount,
   effectiveNightly,
+  legDecisionSignals,
+  type LegCandidate,
 } from "@/lib/prices";
 import { tripBudget } from "@/lib/format";
 import type { Member } from "@/lib/types";
@@ -142,6 +144,79 @@ describe("cheapestMemberAmount / effectiveNightly", () => {
 
   it("is null when there is neither a member price nor a standard price", () => {
     expect(effectiveNightly({ price_per_night: null, prices: [] })).toBeNull();
+  });
+});
+
+describe("legDecisionSignals", () => {
+  // Candidate factory: id, votes (true=yes/false=no), standard price, member prices.
+  function cand(
+    id: string,
+    votes: boolean[],
+    pricePerNight: number | null = null,
+    prices: number[] = [],
+  ): LegCandidate {
+    return {
+      id,
+      votes: votes.map((value) => ({ value })),
+      price_per_night: pricePerNight,
+      prices: prices.map((amount) => ({ amount })),
+    };
+  }
+
+  it("returns no signals for a leg with fewer than two candidates", () => {
+    expect(legDecisionSignals([])).toEqual({ frontRunnerId: null, cheapestId: null });
+    expect(legDecisionSignals([cand("a", [true, true], 100)])).toEqual({
+      frontRunnerId: null,
+      cheapestId: null,
+    });
+  });
+
+  it("crowns the candidate with the highest net yes vote", () => {
+    const signals = legDecisionSignals([
+      cand("a", [true, true, false], 200), // net +1
+      cand("b", [true, true, true], 220), // net +3
+    ]);
+    expect(signals.frontRunnerId).toBe("b");
+  });
+
+  it("never crowns a candidate whose net vote is not positive", () => {
+    const signals = legDecisionSignals([
+      cand("a", [true, false], 150), // net 0
+      cand("b", [false], 120), // net -1
+    ]);
+    expect(signals.frontRunnerId).toBeNull();
+  });
+
+  it("breaks a net-vote tie by the cheaper effective nightly price", () => {
+    const signals = legDecisionSignals([
+      cand("a", [true, true], 300, [280]), // net +2, effective 280
+      cand("b", [true, true], 250), // net +2, effective 250 → wins
+    ]);
+    expect(signals.frontRunnerId).toBe("b");
+  });
+
+  it("marks the unique cheapest option, preferring member prices", () => {
+    const signals = legDecisionSignals([
+      cand("a", [], 300, [210]), // effective 210 → cheapest
+      cand("b", [], 250), // effective 250
+    ]);
+    expect(signals.cheapestId).toBe("a");
+  });
+
+  it("suppresses the cheapest badge on a tie", () => {
+    const signals = legDecisionSignals([
+      cand("a", [], 150),
+      cand("b", [], 150),
+    ]);
+    expect(signals.cheapestId).toBeNull();
+  });
+
+  it("suppresses the cheapest badge when fewer than two options are priced", () => {
+    const signals = legDecisionSignals([
+      cand("a", [true], 150),
+      cand("b", [], null), // unpriced
+    ]);
+    expect(signals.cheapestId).toBeNull();
   });
 });
 

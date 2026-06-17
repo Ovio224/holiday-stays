@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentMemberId } from "@/lib/identity";
 import { getBoardData } from "@/lib/data";
+import { env } from "@/lib/env";
 import { TripBoard } from "@/components/trip-board";
 
 // Per-request data (cookies + live board) — never statically cached.
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export default async function BoardPage() {
   const memberId = await getCurrentMemberId();
-  const { stays, accommodations, members } = await getBoardData();
+  const { stays, accommodations, members, places } = await getBoardData();
 
   // No identity (or a stale cookie pointing at a deleted member) → choose a name.
   if (!memberId || !members.some((m) => m.id === memberId)) {
@@ -29,6 +30,8 @@ export default async function BoardPage() {
         initialStays={stays}
         initialAccommodations={accommodations}
         members={members}
+        initialPlaces={places}
+        locationScoringEnabled={env.locationScoringEnabled()}
         currentMemberId={memberId}
       />
     </main>

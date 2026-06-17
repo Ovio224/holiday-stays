@@ -3,6 +3,15 @@
 export type AccommodationSource = "airbnb" | "booking" | "other";
 export type ParseStatus = "pending" | "ok" | "failed" | "manual";
 
+// Geocoding lifecycle for a coordinate-bearing row (place or accommodation):
+// 'pending' = not yet geocoded (or no key configured), 'ok' = resolved,
+// 'failed' = address not found, 'manual' = user-entered coordinates.
+export type GeocodeStatus = "pending" | "ok" | "failed" | "manual";
+
+// How travel time between a place and an accommodation is measured. Scooter is
+// the Bali default; car is often no faster in traffic; foot anchors are tighter.
+export type TravelMode = "scooter" | "foot" | "car";
+
 export interface Member {
   id: string;
   name: string;
@@ -38,6 +47,13 @@ export interface Accommodation {
   parse_status: ParseStatus;
   parsed_at: string | null;
   created_at: string;
+  // Geocoded coordinates (location-aware scoring). OPTIONAL on purpose: an
+  // un-migrated cloud DB returns rows WITHOUT these keys, so a non-optional type
+  // would be a silent lie. The scorer treats a missing geocode_status as 'pending'.
+  latitude?: number | null;
+  longitude?: number | null;
+  geocode_status?: GeocodeStatus;
+  geocoded_at?: string | null;
 }
 
 export interface Vote {
@@ -77,6 +93,48 @@ export interface AccommodationComment {
   body: string;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * A per-leg "place to visit" (point of interest). The group curates these on each
+ * Stay; the scorer ranks that leg's accommodations by how close they sit to them.
+ * `latitude`/`longitude` are null until the `address` is geocoded server-side (or
+ * a manual coordinate is entered). `category` is validated app-side against the
+ * canonical PLACE_CATEGORIES enum (see src/lib/places.ts). `importance` weights
+ * the POI in the location score (3 = must, 2 = want, 1 = nice); `closer_is_better`
+ * = false flips the curve so "being far is good" (e.g. a quiet retreat avoiding a
+ * nightlife strip) — Phase 1 leaves it at the default `true`.
+ */
+export interface Place {
+  id: string;
+  stay_id: string;
+  label: string;
+  category: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  geocode_status: GeocodeStatus;
+  geocoded_at: string | null;
+  importance: 1 | 2 | 3; // nice / want / must
+  closer_is_better: boolean;
+  sort_order: number;
+  submitted_by: string | null;
+  created_at: string;
+}
+
+/**
+ * One cached routed (or haversine-estimated) leg between an accommodation and a
+ * place, for one travel mode. Phase 3 read cache (`bali.distances`); Phase 1
+ * computes the same shape in-memory from haversine and never persists it.
+ */
+export interface DistanceRecord {
+  accommodation_id: string;
+  place_id: string;
+  mode: TravelMode;
+  minutes: number | null; // one-way travel time
+  distance_km: number | null;
+  source: "valhalla" | "osrm" | "haversine" | "manual";
+  computed_at: string;
 }
 
 /** Structured details parsed from a listing (rating + capacity). */

@@ -213,8 +213,28 @@
   animation: pop-in 0.2s ease both;
 }
 
+/* One-shot entrance: a section fades up a few px into place. Used to stagger the
+   card's content zones in reading order via a per-element `animation-delay`, so a
+   dense card reads as composed rather than dumping every section at once. The
+   keyframe's natural end state is the element's resting state, so disabling it
+   under reduced-motion simply shows everything immediately — no FOUC. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-rise {
+  animation: rise 0.45s ease both;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-pop-in {
+  .animate-pop-in,
+  .animate-rise {
     animation: none !important;
   }
 }
