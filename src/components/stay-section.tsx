@@ -34,7 +34,7 @@ import {
 } from "@/lib/location-score";
 import type { AccommodationWithVotes, Member, Place, Stay } from "@/lib/types";
 
-type SortKey = "default" | "location";
+type SortKey = "votes" | "location";
 
 interface StaySectionProps {
   stay: Stay;
@@ -51,6 +51,20 @@ interface StaySectionProps {
   onPlaceRemoved: (placeId: string) => void;
   isFirst: boolean;
   isLast: boolean;
+}
+
+/**
+ * Upvotes = thumbs-up (yes) votes; that's the headline number we sort on. Net
+ * (yes − no) only breaks ties, so a clean 3–0 edges out a contested 3–2.
+ */
+function voteTally(acc: AccommodationWithVotes): { up: number; net: number } {
+  let up = 0;
+  let down = 0;
+  for (const v of acc.votes) {
+    if (v.value) up += 1;
+    else down += 1;
+  }
+  return { up, net: up - down };
 }
 
 /** Map the board view-model to the minimal shape the scorer needs. */
@@ -89,7 +103,7 @@ export function StaySection({
     nightCount !== null ? `${nightCount} ${nightCount === 1 ? "night" : "nights"}` : "";
   const metaParts = [range, nightLabel].filter(Boolean);
 
-  const [sortKey, setSortKey] = React.useState<SortKey>("default");
+  const [sortKey, setSortKey] = React.useState<SortKey>("votes");
 
   // Location scores (scooter, balanced) for this leg's candidates. Synchronous +
   // neighbour-independent (absolute anchors), so there's no "scoring…" async
@@ -105,11 +119,24 @@ export function StaySection({
     });
   }, [locationScoringEnabled, accommodations, places]);
 
-  // The display order. Default = the order received (created_at). Location =
-  // scored cards by compareByLocation, with un-scorable "needs info" cards kept
-  // together at the END (never interleaved as if they scored low).
+  // Base order: most upvotes first, so the crowd favourites are the first cards
+  // you see (leftmost in the filmstrip). Ties fall back to net score, then to the
+  // received created_at order — toSorted is stable AND leaves the prop untouched.
+  const byUpvotes = React.useMemo(
+    () =>
+      accommodations.toSorted((a, b) => {
+        const ta = voteTally(a);
+        const tb = voteTally(b);
+        return tb.up - ta.up || tb.net - ta.net;
+      }),
+    [accommodations],
+  );
+
+  // The display order. "votes" (the default) = byUpvotes. "location" = scored
+  // cards by compareByLocation, with un-scorable "needs info" cards kept together
+  // at the END (never interleaved as if they scored low).
   const ordered = React.useMemo(() => {
-    if (!locationScoringEnabled || sortKey !== "location") return accommodations;
+    if (!locationScoringEnabled || sortKey !== "location") return byUpvotes;
     const scored: { acc: AccommodationWithVotes; s: ScoreResult }[] = [];
     const rest: AccommodationWithVotes[] = [];
     for (const acc of accommodations) {
@@ -134,7 +161,7 @@ export function StaySection({
       ),
     );
     return [...scored.map((x) => x.acc), ...rest];
-  }, [locationScoringEnabled, sortKey, accommodations, scores]);
+  }, [locationScoringEnabled, sortKey, accommodations, scores, byUpvotes]);
 
   // The sort control is only meaningful with places to measure against AND more
   // than one candidate to reorder.
@@ -238,7 +265,7 @@ export function StaySection({
               <span className="text-sm text-muted-foreground">Sort by</span>
               <Select
                 items={[
-                  { label: "Default order", value: "default" },
+                  { label: "Most upvotes", value: "votes" },
                   { label: "Location", value: "location" },
                 ]}
                 value={sortKey}
@@ -248,8 +275,8 @@ export function StaySection({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="default" className="text-sm">
-                    Default order
+                  <SelectItem value="votes" className="text-sm">
+                    Most upvotes
                   </SelectItem>
                   <SelectItem value="location" className="text-sm">
                     Location
