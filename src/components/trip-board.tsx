@@ -46,6 +46,9 @@ export function TripBoard({
     applyStayRemoval,
     applyPlaceUpsert,
     applyPlaceRemoval,
+    applyAccommodationUpsert,
+    applyAccommodationRemoval,
+    applyVote,
   } = useRealtimeBoard({
     initialStays,
     initialAccommodations,
@@ -262,6 +265,9 @@ export function TripBoard({
             onMoveDown={(id) => moveLeg(id, "down")}
             onPlaceSaved={applyPlaceUpsert}
             onPlaceRemoved={applyPlaceRemoval}
+            onVote={applyVote}
+            onAccommodationSaved={applyAccommodationUpsert}
+            onAccommodationRemoved={applyAccommodationRemoval}
             isFirst={index === 0}
             isLast={index === sortedStays.length - 1}
           />
@@ -296,6 +302,7 @@ export function TripBoard({
         open={submitOpen}
         onOpenChange={setSubmitOpen}
         defaultStayId={submitStayId}
+        onSubmitted={applyAccommodationUpsert}
       />
 
       {/* Leg editor — keyed on the target so fields re-seed on each open. The

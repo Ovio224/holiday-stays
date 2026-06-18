@@ -65,6 +65,24 @@ interface UseRealtimeBoardResult {
   applyPlaceUpsert: (place: Place) => void;
   /** Imperatively drop a place the caller just deleted. */
   applyPlaceRemoval: (placeId: string) => void;
+  /**
+   * Imperatively merge an accommodation the caller just submitted or edited.
+   * Preserves the card's existing votes/prices/comments (the row carries none),
+   * so add + edit both land instantly without waiting for the realtime echo.
+   */
+  applyAccommodationUpsert: (accommodation: Accommodation) => void;
+  /** Imperatively drop an accommodation the caller just deleted. */
+  applyAccommodationRemoval: (accommodationId: string) => void;
+  /**
+   * Imperatively apply the acting member's own vote (the return value of
+   * castVote: the row on a cast/flip, or null on a toggle-off), so the vote
+   * sticks without depending on the realtime echo.
+   */
+  applyVote: (
+    accommodationId: string,
+    memberId: string,
+    vote: Vote | null,
+  ) => void;
 }
 
 /** Upsert a stay row by id (replace-or-insert), tolerant of out-of-order events. */
@@ -111,6 +129,28 @@ function upsertAccommodation(
   }
   // Brand-new accommodation: no votes, prices, or comments yet.
   return [...list, { ...row, votes: [], prices: [], comments: [] }];
+}
+
+/**
+ * Fold the acting member's own vote into the board by (accommodation_id,
+ * member_id) — the optimistic local-apply that mirrors castVote's server
+ * semantics, so a vote sticks WITHOUT waiting for the realtime echo (which may
+ * never arrive). Drops any prior vote this member had on that card, then re-adds
+ * the returned row on a cast/flip, or leaves it removed on a toggle-off (vote =
+ * null). Idempotent with the realtime echo that may follow: a later upsertVote /
+ * removeVote by id converges to the same state.
+ */
+export function applyMemberVote(
+  list: AccommodationWithVotes[],
+  accommodationId: string,
+  memberId: string,
+  vote: Vote | null,
+): AccommodationWithVotes[] {
+  return list.map((a) => {
+    if (a.id !== accommodationId) return a;
+    const others = a.votes.filter((v) => v.member_id !== memberId);
+    return { ...a, votes: vote ? [...others, vote] : others };
+  });
 }
 
 /** Apply a vote insert/update to the matching accommodation's votes array. */
@@ -221,6 +261,23 @@ export function useRealtimeBoard({
   );
   const applyPlaceRemoval = useCallback(
     (placeId: string) => setPlaces((prev) => removePlace(prev, placeId)),
+    [],
+  );
+  const applyAccommodationUpsert = useCallback(
+    (accommodation: Accommodation) =>
+      setAccommodations((prev) => upsertAccommodation(prev, accommodation)),
+    [],
+  );
+  const applyAccommodationRemoval = useCallback(
+    (accommodationId: string) =>
+      setAccommodations((prev) => prev.filter((a) => a.id !== accommodationId)),
+    [],
+  );
+  const applyVote = useCallback(
+    (accommodationId: string, memberId: string, vote: Vote | null) =>
+      setAccommodations((prev) =>
+        applyMemberVote(prev, accommodationId, memberId, vote),
+      ),
     [],
   );
 
@@ -364,5 +421,8 @@ export function useRealtimeBoard({
     applyStayRemoval,
     applyPlaceUpsert,
     applyPlaceRemoval,
+    applyAccommodationUpsert,
+    applyAccommodationRemoval,
+    applyVote,
   };
 }

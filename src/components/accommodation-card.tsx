@@ -31,7 +31,7 @@ import {
 import { cn } from "@/lib/utils";
 import { LocationScoreChip } from "@/components/location-score";
 import type { ScoreResult } from "@/lib/location-score";
-import type { AccommodationWithVotes, Member, Place } from "@/lib/types";
+import type { Accommodation, AccommodationWithVotes, Member, Place, Vote } from "@/lib/types";
 
 interface AccommodationCardProps {
   accommodation: AccommodationWithVotes;
@@ -54,6 +54,12 @@ interface AccommodationCardProps {
   isBestLocated?: boolean;
   /** First visible card → eager-load its cover so it can be the LCP element. */
   priority?: boolean;
+  /** Fold the acting member's vote into board state (survives the optimistic reset). */
+  onVote: (accommodationId: string, memberId: string, vote: Vote | null) => void;
+  /** Fold an add/edit of this listing into board state (no realtime echo needed). */
+  onAccommodationSaved: (accommodation: Accommodation) => void;
+  /** Drop this listing from board state on delete. */
+  onAccommodationRemoved: (accommodationId: string) => void;
 }
 
 export function AccommodationCard({
@@ -70,6 +76,9 @@ export function AccommodationCard({
   isCheapestInLeg = false,
   isBestLocated = false,
   priority = false,
+  onVote,
+  onAccommodationSaved,
+  onAccommodationRemoved,
 }: AccommodationCardProps) {
   const { votes, prices, comments, details } = accommodation;
 
@@ -230,6 +239,8 @@ export function AccommodationCard({
                 places={places}
                 locationScoringEnabled={locationScoringEnabled}
                 isBestLocated={isBestLocated}
+                onSaved={onAccommodationSaved}
+                onDeleted={onAccommodationRemoved}
               />
             </div>
           </div>
@@ -294,6 +305,9 @@ export function AccommodationCard({
               yesCount={yesCount}
               noCount={noCount}
               memberCount={memberCount}
+              onVoted={(vote) => {
+                if (currentMemberId) onVote(accommodation.id, currentMemberId, vote);
+              }}
             />
             <VoterChips votes={votes} members={members} />
           </div>

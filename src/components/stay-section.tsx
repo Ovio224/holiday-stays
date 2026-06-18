@@ -32,7 +32,7 @@ import {
   type ScorableAccommodation,
   type ScoreResult,
 } from "@/lib/location-score";
-import type { AccommodationWithVotes, Member, Place, Stay } from "@/lib/types";
+import type { Accommodation, AccommodationWithVotes, Member, Place, Stay, Vote } from "@/lib/types";
 
 type SortKey = "votes" | "location";
 
@@ -49,6 +49,10 @@ interface StaySectionProps {
   onMoveDown: (stayId: string) => void;
   onPlaceSaved: (place: Place) => void;
   onPlaceRemoved: (placeId: string) => void;
+  /** Local-apply callbacks for the leg's accommodation cards (vote / add-edit / delete). */
+  onVote: (accommodationId: string, memberId: string, vote: Vote | null) => void;
+  onAccommodationSaved: (accommodation: Accommodation) => void;
+  onAccommodationRemoved: (accommodationId: string) => void;
   isFirst: boolean;
   isLast: boolean;
 }
@@ -94,6 +98,9 @@ export function StaySection({
   onMoveDown,
   onPlaceSaved,
   onPlaceRemoved,
+  onVote,
+  onAccommodationSaved,
+  onAccommodationRemoved,
   isFirst,
   isLast,
 }: StaySectionProps) {
@@ -296,6 +303,9 @@ export function StaySection({
             places={places}
             scores={scores}
             locationScoringEnabled={locationScoringEnabled}
+            onVote={onVote}
+            onAccommodationSaved={onAccommodationSaved}
+            onAccommodationRemoved={onAccommodationRemoved}
           />
         </>
       )}

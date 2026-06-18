@@ -8,7 +8,7 @@ import * as React from "react";
 import { toast } from "sonner";
 
 import { submitAccommodation } from "@/actions/accommodations";
-import type { Stay } from "@/lib/types";
+import type { Accommodation, Stay } from "@/lib/types";
 import {
   Sheet,
   SheetContent,
@@ -35,6 +35,8 @@ interface SubmitSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultStayId: string | null;
+  /** Fold the new listing into board state so it appears without the realtime echo. */
+  onSubmitted: (accommodation: Accommodation) => void;
 }
 
 export function SubmitSheet({
@@ -43,6 +45,7 @@ export function SubmitSheet({
   open,
   onOpenChange,
   defaultStayId,
+  onSubmitted,
 }: SubmitSheetProps) {
   const [isPending, startTransition] = React.useTransition();
 
@@ -102,7 +105,7 @@ export function SubmitSheet({
 
     startTransition(async () => {
       try {
-        await submitAccommodation({
+        const added = await submitAccommodation({
           url: trimmedUrl,
           stayId,
           memberId: currentMemberId,
@@ -111,6 +114,7 @@ export function SubmitSheet({
           currency: currency.trim() || undefined,
           notes: notes.trim() || undefined,
         });
+        onSubmitted(added);
         toast.success("Added");
         resetForm();
         onOpenChange(false);

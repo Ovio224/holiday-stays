@@ -18,7 +18,7 @@ import { AccommodationCard } from "@/components/accommodation-card";
 import { cn } from "@/lib/utils";
 import { legDecisionSignals } from "@/lib/prices";
 import type { ScoreResult } from "@/lib/location-score";
-import type { AccommodationWithVotes, Member, Place } from "@/lib/types";
+import type { Accommodation, AccommodationWithVotes, Member, Place, Vote } from "@/lib/types";
 
 interface AccommodationCarouselProps {
   accommodations: AccommodationWithVotes[];
@@ -31,6 +31,10 @@ interface AccommodationCarouselProps {
   places: Place[];
   scores: Map<string, ScoreResult>;
   locationScoringEnabled: boolean;
+  /** Local-apply callbacks threaded to each card (vote / add-edit / delete). */
+  onVote: (accommodationId: string, memberId: string, vote: Vote | null) => void;
+  onAccommodationSaved: (accommodation: Accommodation) => void;
+  onAccommodationRemoved: (accommodationId: string) => void;
 }
 
 /** The card width, shared by the cards and the centring padding. */
@@ -46,6 +50,9 @@ export function AccommodationCarousel({
   places,
   scores,
   locationScoringEnabled,
+  onVote,
+  onAccommodationSaved,
+  onAccommodationRemoved,
 }: AccommodationCarouselProps) {
   const trackRef = React.useRef<HTMLDivElement>(null);
   const count = accommodations.length;
@@ -181,6 +188,9 @@ export function AccommodationCarousel({
               isCheapestInLeg={accommodation.id === cheapestId}
               isBestLocated={accommodation.id === bestLocatedId}
               priority={i === 0}
+              onVote={onVote}
+              onAccommodationSaved={onAccommodationSaved}
+              onAccommodationRemoved={onAccommodationRemoved}
             />
           </div>
         ))}

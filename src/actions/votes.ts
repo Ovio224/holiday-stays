@@ -10,20 +10,24 @@
  */
 import { assertGate } from "@/lib/gate/assert";
 import { getServiceClient } from "@/lib/supabase/server";
+import type { Vote } from "@/lib/types";
 
 /**
  * Cast (or toggle) a member's vote on an accommodation.
  *
  *  - If an existing vote already matches the submitted value, delete it
- *    (toggle off -> back to undecided).
+ *    (toggle off -> back to undecided) and return null.
  *  - Otherwise upsert the vote, conflicting on (accommodation_id, member_id) so
- *    a flipped opinion overwrites the previous row in place.
+ *    a flipped opinion overwrites the previous row in place, and return the row.
+ *
+ * The returned row (or null) lets the caller fold its own vote into board state
+ * immediately, so the vote sticks without waiting for the realtime echo.
  */
 export async function castVote(input: {
   accommodationId: string;
   memberId: string;
   value: boolean;
-}): Promise<void> {
+}): Promise<Vote | null> {
   await assertGate();
 
   const supabase = getServiceClient();
@@ -50,21 +54,27 @@ export async function castVote(input: {
     if (deleteError) {
       throw new Error(`Failed to clear vote: ${deleteError.message}`);
     }
-    return;
+    return null;
   }
 
   // New vote or a changed opinion: upsert, letting the DB default updated_at.
-  const { error: upsertError } = await supabase.from("votes").upsert(
-    {
-      accommodation_id: input.accommodationId,
-      member_id: input.memberId,
-      value: input.value,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "accommodation_id,member_id" },
-  );
+  const { data, error: upsertError } = await supabase
+    .from("votes")
+    .upsert(
+      {
+        accommodation_id: input.accommodationId,
+        member_id: input.memberId,
+        value: input.value,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "accommodation_id,member_id" },
+    )
+    .select()
+    .single();
 
-  if (upsertError) {
-    throw new Error(`Failed to cast vote: ${upsertError.message}`);
+  if (upsertError || !data) {
+    throw new Error(`Failed to cast vote: ${upsertError?.message ?? "no data"}`);
   }
+
+  return data as Vote;
 }

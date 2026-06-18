@@ -35,7 +35,7 @@ import {
   sourceLabel,
 } from "@/lib/format";
 import { LocationScorePanel } from "@/components/location-score";
-import type { AccommodationWithVotes, Member, Place } from "@/lib/types";
+import type { Accommodation, AccommodationWithVotes, Member, Place } from "@/lib/types";
 import {
   Dialog,
   DialogClose,
@@ -62,6 +62,10 @@ interface AccommodationDetailDialogProps {
   places: Place[];
   isBestLocated?: boolean;
   locationScoringEnabled: boolean;
+  /** Fold an edit into board state so it shows without the realtime echo. */
+  onSaved: (accommodation: Accommodation) => void;
+  /** Drop this card from board state on delete (same rationale). */
+  onDeleted: (accommodationId: string) => void;
 }
 
 export function AccommodationDetailDialog({
@@ -74,6 +78,8 @@ export function AccommodationDetailDialog({
   places,
   isBestLocated = false,
   locationScoringEnabled,
+  onSaved,
+  onDeleted,
 }: AccommodationDetailDialogProps) {
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
@@ -86,12 +92,14 @@ export function AccommodationDetailDialog({
   }
 
   // Delete the whole listing (cascades to its votes, prices, and comments). On
-  // success we close the dialog; the realtime `accommodations` DELETE event drops
-  // the card from the board for everyone.
+  // success we drop the card from local board state right away (so the acting
+  // user sees it go without waiting on the realtime echo) and close the dialog;
+  // the realtime DELETE event is then an idempotent no-op for everyone else.
   function handleDelete() {
     startDeleteTransition(async () => {
       try {
         await deleteAccommodation(accommodation.id);
+        onDeleted(accommodation.id);
         toast.success("Listing deleted");
         setOpen(false);
       } catch (error) {
@@ -126,6 +134,7 @@ export function AccommodationDetailDialog({
           <EditView
             accommodation={accommodation}
             currentMemberId={currentMemberId}
+            onSaved={onSaved}
             onDone={() => setEditing(false)}
             onCancel={() => setEditing(false)}
           />
@@ -438,11 +447,13 @@ function ReadView({
 function EditView({
   accommodation,
   currentMemberId,
+  onSaved,
   onDone,
   onCancel,
 }: {
   accommodation: AccommodationWithVotes;
   currentMemberId: string | null;
+  onSaved: (accommodation: Accommodation) => void;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -530,7 +541,8 @@ function EditView({
 
     startTransition(async () => {
       try {
-        await updateAccommodation(input);
+        const saved = await updateAccommodation(input);
+        onSaved(saved);
         toast.success("Saved");
         onDone();
       } catch (error) {

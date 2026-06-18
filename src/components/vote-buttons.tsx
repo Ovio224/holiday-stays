@@ -13,6 +13,7 @@ import { toast } from "sonner";
 
 import { castVote } from "@/actions/votes";
 import { cn } from "@/lib/utils";
+import type { Vote } from "@/lib/types";
 
 interface VoteButtonsProps {
   accommodationId: string;
@@ -23,6 +24,11 @@ interface VoteButtonsProps {
   noCount: number;
   /** Group size — the denominator for the quorum line + participation bar. */
   memberCount: number;
+  /**
+   * Fold the cast vote into board state once the server confirms it (the row on
+   * a cast/flip, null on a toggle-off), so it sticks without the realtime echo.
+   */
+  onVoted: (vote: Vote | null) => void;
 }
 
 /** Local snapshot of what the buttons should show, kept optimistic. */
@@ -39,6 +45,7 @@ export function VoteButtons({
   yesCount,
   noCount,
   memberCount,
+  onVoted,
 }: VoteButtonsProps) {
   const [isPending, startTransition] = useTransition();
 
@@ -64,11 +71,14 @@ export function VoteButtons({
     startTransition(async () => {
       applyOptimistic(next);
       try {
-        await castVote({
+        // Fold the confirmed vote into board state so it survives the optimistic
+        // reset (useOptimistic snaps back to props once the transition settles).
+        const saved = await castVote({
           accommodationId,
           memberId: currentMemberId,
           value: next,
         });
+        onVoted(saved);
       } catch {
         toast.error("Couldn't save your vote — try again");
       }
