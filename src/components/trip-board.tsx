@@ -313,6 +313,9 @@ export function TripBoard({
         onOpenChange={setLegSheetOpen}
         stay={editingStay}
         stays={sortedStays}
+        // The leg's current listings, so the delete dialog can name exactly what
+        // its cascade would destroy (votes + comments included).
+        accommodations={editingStay ? (byStay.get(editingStay.id) ?? []) : []}
         onSaved={(changed) => changed.forEach(applyStayUpsert)}
         onDeleted={applyStayRemoval}
         key={`${editingStay?.id ?? "new"}-${legSheetNonce}`}

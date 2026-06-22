@@ -20,9 +20,9 @@ import { toast } from "sonner";
 import { CornerDownRight, Minus, Plus, Trash2Icon } from "lucide-react";
 
 import { createStay, updateStay, deleteStay } from "@/actions/stays";
-import { addNights } from "@/lib/stays";
+import { addNights, confirmMatches, legContentsSummary } from "@/lib/stays";
 import { formatDateRange, nights as nightsBetween } from "@/lib/format";
-import type { Stay } from "@/lib/types";
+import type { AccommodationWithVotes, Stay } from "@/lib/types";
 import {
   Sheet,
   SheetContent,
@@ -65,6 +65,17 @@ interface LegSheetProps {
   onSaved?: (changed: Stay[]) => void;
   /** Called with the deleted leg's id so the board drops it immediately. */
   onDeleted?: (stayId: string) => void;
+  /**
+   * The leg's current listings (edit mode). Powers the delete dialog's "what this
+   * cascade will destroy" summary — votes/comments are read off each one. Empty in
+   * create mode, where there's nothing to delete.
+   */
+  accommodations?: AccommodationWithVotes[];
+}
+
+/** "1 listing" / "4 listings" — pluralize a labelled count for the warning copy. */
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
 export function LegSheet({
@@ -74,11 +85,36 @@ export function LegSheet({
   stays,
   onSaved,
   onDeleted,
+  accommodations = [],
 }: LegSheetProps) {
   const isEdit = stay !== null;
   const [isPending, startTransition] = React.useTransition();
   const [isDeleting, startDeleteTransition] = React.useTransition();
   const [confirmOpen, setConfirmOpen] = React.useState(false);
+  // What the user must type to arm the delete (the leg's name).
+  const [confirmText, setConfirmText] = React.useState("");
+
+  // Spell out the cascade: deleting this leg also deletes every listing in it and
+  // (via DB cascade) all their votes and comments. We surface those exact counts
+  // so the warning names the blast radius instead of an abstract "everything".
+  const summary = React.useMemo(
+    () => legContentsSummary(accommodations),
+    [accommodations],
+  );
+  // votes/comments can't exist without a listing, so listings>0 ⟺ there's loss.
+  const hasContents = summary.listings > 0;
+  const countsLine = [
+    plural(summary.listings, "listing"),
+    summary.votes > 0 ? plural(summary.votes, "vote") : null,
+    summary.comments > 0 ? plural(summary.comments, "comment") : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  // A leg with content requires typing its name to arm the delete; an empty leg is
+  // harmless, so we don't gate it behind the type-to-confirm step.
+  const canDelete =
+    !isDeleting &&
+    (!hasContents || confirmMatches(confirmText, stay?.label ?? ""));
 
   // The leg a new one continues from by default: the last one in the itinerary.
   const lastLeg = stays.length > 0 ? stays[stays.length - 1] : null;
@@ -426,17 +462,63 @@ export function LegSheet({
         </form>
       </SheetContent>
 
-      {/* Cascading-delete confirmation. */}
-      {isEdit && (
-        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      {/* Cascading-delete confirmation. Names exactly what the cascade destroys,
+          and (when there's anything to lose) gates the button behind typing the
+          leg's name — so a stray tap can't wipe a whole leg the way it once did. */}
+      {stay && (
+        <Dialog
+          open={confirmOpen}
+          onOpenChange={(next) => {
+            setConfirmOpen(next);
+            // Re-arm cleanly: clear the typed name whenever the dialog closes.
+            if (!next) setConfirmText("");
+          }}
+        >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Delete this leg?</DialogTitle>
+              <DialogTitle>Delete “{stay.label}”?</DialogTitle>
               <DialogDescription>
-                This also removes every place and vote in it. This can&apos;t be
-                undone.
+                {hasContents
+                  ? "This permanently deletes the whole leg, including everything in it. This can’t be undone."
+                  : "This leg is empty. Deleting it can’t be undone."}
               </DialogDescription>
             </DialogHeader>
+
+            {hasContents && (
+              <div className="flex flex-col gap-3">
+                {/* The blast radius, named explicitly. */}
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-foreground">
+                  <span className="font-semibold text-destructive">
+                    Gone for good:
+                  </span>{" "}
+                  {countsLine}
+                </div>
+
+                {/* Type-to-confirm — matching the leg name arms the red button. */}
+                <div className="flex flex-col gap-2">
+                  <Label
+                    htmlFor="leg-confirm"
+                    className="text-sm text-muted-foreground"
+                  >
+                    Type{" "}
+                    <span className="font-semibold text-foreground">
+                      {stay.label}
+                    </span>{" "}
+                    to confirm
+                  </Label>
+                  <Input
+                    id="leg-confirm"
+                    autoFocus
+                    autoComplete="off"
+                    value={confirmText}
+                    onChange={(e) => setConfirmText(e.target.value)}
+                    placeholder={stay.label}
+                    className="h-12 rounded-lg px-4 text-base"
+                  />
+                </div>
+              </div>
+            )}
+
             <DialogFooter>
               <DialogClose
                 render={<Button variant="outline" disabled={isDeleting} />}
@@ -446,7 +528,7 @@ export function LegSheet({
               <Button
                 variant="destructive"
                 onClick={handleDelete}
-                disabled={isDeleting}
+                disabled={!canDelete}
               >
                 {isDeleting ? "Removing…" : "Delete leg"}
               </Button>

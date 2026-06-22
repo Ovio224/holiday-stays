@@ -6,7 +6,13 @@
  * the rate-limiter's isLockedOut/recordAttempt.
  */
 import { describe, it, expect } from "vitest";
-import { addNights, planConsecutiveInsert, prepareStayInput } from "@/lib/stays";
+import {
+  addNights,
+  confirmMatches,
+  legContentsSummary,
+  planConsecutiveInsert,
+  prepareStayInput,
+} from "@/lib/stays";
 
 describe("prepareStayInput", () => {
   it("trims the label", () => {
@@ -182,5 +188,55 @@ describe("planConsecutiveInsert", () => {
     expect(() => planConsecutiveInsert(seq, "zzz")).toThrow(
       "Could not find the leg to add after.",
     );
+  });
+});
+
+describe("legContentsSummary", () => {
+  it("is all zeros for an empty leg", () => {
+    expect(legContentsSummary([])).toEqual({ listings: 0, votes: 0, comments: 0 });
+  });
+
+  it("counts listings and sums votes + comments across them", () => {
+    const summary = legContentsSummary([
+      { votes: [{}, {}], comments: [{}] },
+      { votes: [{}], comments: [] },
+    ]);
+    expect(summary).toEqual({ listings: 2, votes: 3, comments: 1 });
+  });
+
+  it("counts a listing with no votes or comments", () => {
+    expect(legContentsSummary([{ votes: [], comments: [] }])).toEqual({
+      listings: 1,
+      votes: 0,
+      comments: 0,
+    });
+  });
+});
+
+describe("confirmMatches", () => {
+  it("matches the exact leg name", () => {
+    expect(confirmMatches("Uluwatu", "Uluwatu")).toBe(true);
+  });
+
+  it("ignores case", () => {
+    expect(confirmMatches("uluwatu", "Uluwatu")).toBe(true);
+  });
+
+  it("ignores surrounding whitespace", () => {
+    expect(confirmMatches("  Uluwatu  ", "Uluwatu")).toBe(true);
+  });
+
+  it("rejects a non-matching value", () => {
+    expect(confirmMatches("Ulu", "Uluwatu")).toBe(false);
+  });
+
+  it("rejects empty input", () => {
+    expect(confirmMatches("", "Uluwatu")).toBe(false);
+    expect(confirmMatches("   ", "Uluwatu")).toBe(false);
+  });
+
+  it("never matches against an empty label", () => {
+    expect(confirmMatches("", "")).toBe(false);
+    expect(confirmMatches("  ", "   ")).toBe(false);
   });
 });

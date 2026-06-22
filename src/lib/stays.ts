@@ -127,3 +127,41 @@ export function planConsecutiveInsert(
 
   return { newSortOrder, shifts };
 }
+
+/** What a leg holds — used to spell out the blast radius of deleting it. */
+export interface LegContentsSummary {
+  listings: number;
+  votes: number;
+  comments: number;
+}
+
+/**
+ * Count what a delete would take down with the leg: the number of listings in it,
+ * plus the votes and comments cascaded across those listings (the DB deletes them
+ * via `on delete cascade`). Structurally typed — it only reads `.votes`/`.comments`
+ * lengths — so it stays a pure, render-free helper the confirm dialog can trust.
+ */
+export function legContentsSummary(
+  accommodations: ReadonlyArray<{
+    votes: readonly unknown[];
+    comments: readonly unknown[];
+  }>,
+): LegContentsSummary {
+  return {
+    listings: accommodations.length,
+    votes: accommodations.reduce((sum, a) => sum + a.votes.length, 0),
+    comments: accommodations.reduce((sum, a) => sum + a.comments.length, 0),
+  };
+}
+
+/**
+ * Whether a typed confirmation value matches the leg's name closely enough to arm
+ * a destructive delete — trimmed and case-insensitive, so "  uluwatu " clears the
+ * gate for "Uluwatu". An empty/whitespace-only label never matches (defensive: we
+ * must never auto-arm the button when there's effectively nothing to type).
+ */
+export function confirmMatches(input: string, label: string): boolean {
+  const target = label.trim().toLowerCase();
+  if (!target) return false;
+  return input.trim().toLowerCase() === target;
+}
